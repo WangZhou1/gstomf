@@ -44,10 +44,10 @@
 static GstStaticPadTemplate sinktemplate = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-     GST_STATIC_CAPS("audio/,"
+    GST_STATIC_CAPS("audio/,"
 	    "rate = (int) [ 1, 48000 ],"
 		"channels = (int) [ 1, 2 ]"
-		));
+	));
 
 GST_DEBUG_CATEGORY_STATIC (gst_omf_aud_player_debug);
 #define GST_CAT_DEFAULT gst_omf_aud_player_debug
@@ -70,7 +70,7 @@ enum
 #define DEFAULT_LAST_MESSAGE 		NULL
 #define DEFAULT_RATE				16000
 #define DEFAULT_CHANNEL				1
-#define DEFAULT_MEDIA				"codec=pcm"
+#define DEFAULT_CODEC				NULL
 #define DEFAULT_CODEC_LINUX			TRUE
 #define DEFAULT_LIVE_LIMIT			NULL
 
@@ -192,13 +192,12 @@ gst_omf_aud_player_class_init (GstOmfAudPlayerClass * klass)
           2, DEFAULT_CHANNEL,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_MEDIA,
-	 g_param_spec_string ("media", "Media", "The input audio media info, optional:\n"
-	  											"\t\t\t   (1): codec=aac \n"
-	  											"\t\t\t   (2): codec=alaw \n"
-	  											"\t\t\t   (3): codec=ulaw \n"
-	  											"\t\t\t   (4): codec=g722 \n"
-	  											"\t\t\t   (5): codec=pcm \n"
-	  											"\t\t\t   (6): codec=opus", NULL,
+	 g_param_spec_string ("codec", "Codec", "The input audio codec, optional:\n"
+	  											"\t\t\t   (1): aac \n"
+	  											"\t\t\t   (2): alaw \n"
+	  											"\t\t\t   (3): ulaw \n"
+	  											"\t\t\t   (4): g722 \n"
+	  											"\t\t\t   (5): opus", NULL,
 		  G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_CODEC_LINUX,
 	 g_param_spec_boolean ("codec-on-linux", "Codec on Linux",
@@ -238,9 +237,13 @@ gst_omf_aud_player_init (GstOmfAudPlayer * sink)
 
   sink->rate = DEFAULT_RATE;
   sink->channel = DEFAULT_CHANNEL;
-  sink->media = g_strdup(DEFAULT_MEDIA);
+  sink->media = DEFAULT_CODEC ? g_strdup(DEFAULT_CODEC) : NULL;
   sink->codecOnLinux = DEFAULT_CODEC_LINUX;
   sink->liveLimit = DEFAULT_LIVE_LIMIT ? g_strdup(DEFAULT_LIVE_LIMIT) : NULL;
+
+  if(sink->media == NULL){
+  	sink->media = g_strdup("pcm");
+  }
 
   sink->omf_hd = OmfAudPlayerCreate();
 }
@@ -542,8 +545,9 @@ gst_omf_aud_player_start (GstBaseSink * bsink)
 
   OmfAudPlayerSetSampleRate(sink->omf_hd, sink->rate);
   OmfAudPlayerSetChannel(sink->omf_hd, sink->channel);
-  OmfAudPlayerSetMediaInfo(sink->omf_hd, sink->media);
-
+  if(sink->media){
+  	OmfAudPlayerSetMediaInfo(sink->omf_hd, sink->media);
+  }
   if(sink->codecOnLinux){
 	OmfAudPlayerSetCodecOnLinux(sink->omf_hd, sink->codecOnLinux);	
   }

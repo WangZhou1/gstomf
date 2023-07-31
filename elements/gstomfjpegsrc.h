@@ -2,7 +2,7 @@
  * Copyright (C) 1999,2000 Erik Walthinsen <omega@cse.ogi.edu>
  *                    2000 Wim Taymans <wtay@chello.be>
  *
- * gstomfJpegsrc.h:
+ * gstomfjpegsrc.h:
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -69,6 +69,8 @@ typedef struct _GstOmfJpegSrc {
   guint			prerecidx;
 
   gboolean		lowbw;
+  
+  gchar*	  	media;
 
   gpointer 		omf_hd;
 } GstOmfJpegSrc;

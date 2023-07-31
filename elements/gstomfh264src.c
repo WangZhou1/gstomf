@@ -46,7 +46,11 @@
 static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS("video/x-h264"));
+    GST_STATIC_CAPS("video/x-h264,"
+		"width = (int) [ 480, 4096 ],"
+		"height = (int) [ 320, 2160 ],"
+		"framerate = (int) [ 1, 60 ]"
+	));
 
 GST_DEBUG_CATEGORY_STATIC (gst_omf_h264_src_debug);
 #define GST_CAT_DEFAULT gst_omf_h264_src_debug
@@ -69,7 +73,7 @@ enum
 #define	DEFAULT_FRAMERATE		30
 #define DEFAULT_BITRATE			2000000
 #define DEFAULT_GOP				15
-#define DEFAULT_GOPTYPE			"IPPP"
+#define DEFAULT_GOPTYPE			OMF_H264_SRC_GOP_TYPE_IPPP
 #define DEFAULT_CODEC			NULL
 #define	DEFAULT_PREREC_IDX		0
 #define DEFAULT_PREREC_PIPE		NULL
@@ -99,8 +103,28 @@ enum
   PROP_SHARE,
   PROP_CACHE,  
   PROP_LOW_BW,
+  PROP_MEDIA,
   PROP_LAST,
 };
+
+#define GST_OMF_H264_GOP_TYPE (gst_omf_h264_src_get_gop_type())
+static GType
+gst_omf_h264_src_get_gop_type (void)
+{
+  static GType omfh264src_gop_type_type = 0;
+  static const GEnumValue omfh264src_gop_type[] = {
+	{OMF_H264_SRC_GOP_TYPE_IBBP, "Gop type IBBP", "IBBP"},
+	{OMF_H264_SRC_GOP_TYPE_IPPP, "Gop type IPPP", "IPPP"},
+	{OMF_H264_SRC_GOP_TYPE_IIII, "Gop type IIII", "IIII"},
+	{0, NULL, NULL},
+  };
+
+  if (!omfh264src_gop_type_type) {
+	omfh264src_gop_type_type =
+		g_enum_register_static ("GstOmfH264SrcGopType", omfh264src_gop_type);
+  }
+  return omfh264src_gop_type_type;
+}
 
 #define _do_init \
     GST_DEBUG_CATEGORY_INIT (gst_omf_h264_src_debug, "omfh264src", 0, "omfh264src element");
@@ -170,7 +194,7 @@ gst_omf_h264_src_class_init (GstOmfH264SrcClass * klass)
           4096, DEFAULT_WIDTH,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_HEIGHT,
-      g_param_spec_int ("height", "Height", "height of resolution", 320,
+      g_param_spec_int ("height", "Height", "Height of resolution", 320,
           2160, DEFAULT_HEIGHT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_FRAMERATE,
@@ -186,11 +210,9 @@ gst_omf_h264_src_class_init (GstOmfH264SrcClass * klass)
           1200, DEFAULT_FRAMERATE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_GOPTYPE,
-		g_param_spec_string ("goptype", "GOP Type", "GOP type, optional:\n"
-														"\t\t\t   (1): IIII \n"
-														"\t\t\t   (2): IPPP \n"
-														"\t\t\t   (3): IBBP", NULL,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));  
+      g_param_spec_enum ("goptype", "GOP Type",
+          "H264 GOP type", GST_OMF_H264_GOP_TYPE,
+          DEFAULT_GOPTYPE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)); 
   g_object_class_install_property (gobject_class, PROP_CODEC,
 		g_param_spec_string ("codec", "Codec", "H264 encode parameter", NULL,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));  
@@ -213,6 +235,9 @@ gst_omf_h264_src_class_init (GstOmfH264SrcClass * klass)
       g_param_spec_boolean ("low-bw", "Low bandwidth",
           "Set true to use low bandwidth mode", DEFAULT_LOW_BW,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_MEDIA,
+	   g_param_spec_string ("media-info", "Media information", "Get media information", NULL,
+		   G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));  
 
   gst_element_class_set_static_metadata (gstelement_class,
       "Omf H264 Source",
@@ -244,12 +269,13 @@ gst_omf_h264_src_init (GstOmfH264Src * omfh264src)
   omfh264src->framerate = DEFAULT_FRAMERATE;
   omfh264src->bitrate = DEFAULT_BITRATE;
   omfh264src->gop = DEFAULT_GOP;
-  omfh264src->goptype = DEFAULT_GOPTYPE ? strdup(DEFAULT_GOPTYPE) : NULL;
+  omfh264src->goptype = DEFAULT_GOPTYPE;
   omfh264src->codec = DEFAULT_CODEC ? strdup(DEFAULT_CODEC) : NULL;
   omfh264src->prerecidx = DEFAULT_PREREC_IDX;
   omfh264src->prerecpipe = DEFAULT_PREREC_PIPE ? strdup(DEFAULT_PREREC_PIPE) : NULL;
   omfh264src->shareidx = DEFAULT_SHARE;
   omfh264src->lowbw = DEFAULT_LOW_BW;
+  omfh264src->media = NULL;
 
   omfh264src->omf_hd = OmfH264SrcCreate();
 
@@ -268,8 +294,6 @@ gst_omf_h264_src_finalize (GObject * object)
 	 OmfH264SrcDestory(src->omf_hd);
   }
 
-  g_free(src->goptype);
-  src->goptype = NULL;
   g_free(src->codec);
   src->codec = NULL;
   g_free(src->prerecpipe);
@@ -352,8 +376,8 @@ gst_omf_h264_src_set_property (GObject * object, guint prop_id,
 		src->gop = g_value_get_int(value);
 		break;
 	case PROP_GOPTYPE:
-		g_free(src->goptype);
-		src->goptype = g_strdup(g_value_get_string(value));
+		src->goptype = (GstOmfH264SrcGopType)g_value_get_enum(value);
+		break;
 	case PROP_CODEC:
 		g_free(src->codec);
 		src->codec = g_strdup(g_value_get_string(value));
@@ -426,7 +450,7 @@ gst_omf_h264_src_get_property (GObject * object, guint prop_id, GValue * value,
 		g_value_set_int(value, src->gop);
 		break;
 	case PROP_GOPTYPE:
-		g_value_set_string(value, src->goptype);
+		g_value_set_enum(value, src->goptype);
 		break;
 	case PROP_CODEC:
 		g_value_set_string(value, src->codec);
@@ -445,6 +469,9 @@ gst_omf_h264_src_get_property (GObject * object, guint prop_id, GValue * value,
 		break;
 	case PROP_LOW_BW:
 		g_value_set_boolean(value, src->lowbw);
+		break;
+	case PROP_MEDIA:
+		g_value_set_string(value, src->media);
 		break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -532,6 +559,7 @@ gst_omf_h264_src_create (GstBaseSrc * basesrc, guint64 offset, guint length,
 		GST_BUFFER_PTS(buf) = frame.pts_ms;
 		GST_BUFFER_DTS(buf) = frame.pts_ms;
 		GST_BUFFER_OFFSET(buf) = frame.index;	
+		GST_MINI_OBJECT_CAST (buf)->flags = frame.iskeyframe;
 	  }
 	}	
   }
@@ -627,9 +655,9 @@ gst_omf_h264_src_start (GstBaseSrc * basesrc)
   if(src->gop){
    	g_return_val_if_fail(OmfH264SrcSetGop(src->omf_hd, src->gop), FALSE);
   }
-  if(src->goptype){
-    g_return_val_if_fail(OmfH264SrcSetGopType(src->omf_hd, src->goptype), FALSE);
-  }
+  //if(src->goptype){
+    g_return_val_if_fail(OmfH264SrcSetGopType(src->omf_hd, (int)src->goptype), FALSE);
+  //}
   if(src->prerecidx){
   	g_return_val_if_fail(OmfH264SrcSetPreRecord(src->omf_hd, src->prerecidx), FALSE);
   }		
@@ -642,6 +670,9 @@ gst_omf_h264_src_start (GstBaseSrc * basesrc)
   if(src->lowbw){
 	g_return_val_if_fail(OmfH264SrcSetLowBandWidth(src->omf_hd, src->lowbw), FALSE);
   }
+
+  src->media = OmfH264SrcGetMediaInfo(src->omf_hd);
+  printf ("media info:%s", src->media);
    
   return OmfH264SrcStatusUp(src->omf_hd, OMF_STATE_PLAYING);
 }

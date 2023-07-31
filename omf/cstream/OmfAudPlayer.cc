@@ -76,11 +76,15 @@ EXTERNC BOOL OmfAudPlayerSetChannel(void* hd, unsigned int channel){
 	return player->SetChannels(channel);
 }
 
-EXTERNC BOOL OmfAudPlayerSetMediaInfo(void* hd, const char* media){
+EXTERNC BOOL OmfAudPlayerSetMediaInfo(void* hd, const char* codec){
 	returnIfC1(FALSE, !hd);
-	returnIfC1(FALSE, !media);
+	returnIfC1(FALSE, !codec);
 
 	auto player = OBJECT_CONVERT(hd, IAudioPlayer);
+
+	char media[32];
+	sprintf(media, "codec=%s", codec);
+	
 	return player->SetMediaInfo(media);
 }
 

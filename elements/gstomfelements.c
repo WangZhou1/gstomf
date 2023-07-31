@@ -34,6 +34,9 @@ plugin_init (GstPlugin * plugin)
 	if (!gst_element_register (plugin, "omfjpegsrc", GST_RANK_NONE,
 		gst_omf_jpeg_src_get_type()))
 		return FALSE;
+	if (!gst_element_register (plugin, "omfyuvsrc", GST_RANK_NONE,
+		gst_omf_yuv_src_get_type()))
+		return FALSE;
 
     return TRUE;
 }

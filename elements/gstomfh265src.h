@@ -44,6 +44,17 @@ G_BEGIN_DECLS
   (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_OMF_H265_SRC))
 
 /**
+ * The gop type h265 support.
+ */
+
+typedef enum {
+  OMF_H265_SRC_GOP_TYPE_IBBP = 0,
+  OMF_H265_SRC_GOP_TYPE_IPPP,
+  OMF_H265_SRC_GOP_TYPE_IIII
+} GstOmfH265SrcGopType;
+
+
+/**
  * GstOmfH265Src:
  *
  * Opaque #GstOmfH265Src data structure.
@@ -65,7 +76,7 @@ typedef struct _GstOmfH265Src {
   guint			width;
   guint			height;
   guint			gop;
-  gchar*		goptype;
+  GstOmfH265SrcGopType		goptype;
   guint			framerate;
   guint			bitrate;
   gchar*		codec;
@@ -78,6 +89,8 @@ typedef struct _GstOmfH265Src {
   guint			cache;
 
   gboolean		lowbw;
+
+  gchar*		media;
 
   gpointer 		omf_hd;
 } GstOmfH265Src;

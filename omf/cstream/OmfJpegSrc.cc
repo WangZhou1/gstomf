@@ -102,13 +102,15 @@ EXTERNC BOOL OmfJpegSrcSetPreRecord(void* hd, unsigned group){
 	return src->SetPreRecordGroup(group);
 }
 
-EXTERNC const char* OmfJpegSrcGetMediaString(void* hd){
-	returnIfC1(0, !hd);
-	auto src = OBJECT_CONVERT(hd, IJpegSource);
-	if(src->CurrentState() != State::null){
-		
-	}
-	return 0;
-}
+EXTERNC const char* OmfJpegSrcGetMediaInfo(void* hd){
+	returnIfC1(FALSE, !hd);
 
+	auto src = OBJECT_CONVERT(hd, IJpegSource);
+		
+	if(src->CurrentState() == State::null){
+		returnIfC1(NULL, !src->ChangeUp(State::ready));
+	}
+
+	return src->GetJpegMediaInfo().media.c_str();
+}
 

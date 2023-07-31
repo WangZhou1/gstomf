@@ -2,7 +2,7 @@
  * Copyright (C) 1999,2000 Erik Walthinsen <omega@cse.ogi.edu>
  *                    2000 Wim Taymans <wtay@chello.be>
  *
- * gstomfh264src.h:
+ * gstomfyuvsrc.h:
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -21,45 +21,34 @@
  */
 
 
-#ifndef __GST_OMF_H264_SRC_H__
-#define __GST_OMF_H264_SRC_H__
+#ifndef __GST_OMF_YUV_SRC_H__
+#define __GST_OMF_YUV_SRC_H__
 
 #include <gst/gst.h>
 #include <gst/base/gstbasesrc.h>
 
 #include "omfcstream.h"
-#include "OmfH264Src.h"
+#include "OmfYuvSrc.h"
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_OMF_H264_SRC \
-  (gst_omf_h264_src_get_type())
-#define GST_OMF_H264_SRC(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_OMF_H264_SRC,GstOmfH264Src))
-#define GST_OMF_H264_SRC_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_OMF_H264_SRC,GstOmfH264SrcClass))
-#define GST_IS_OMF_H264_SRC(obj) \
-  (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_OMF_H264_SRC))
-#define GST_IS_OMF_H264_SRC_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_OMF_H264_SRC))
+#define GST_TYPE_OMF_YUV_SRC \
+  (gst_omf_yuv_src_get_type())
+#define GST_OMF_YUV_SRC(obj) \
+  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_OMF_YUV_SRC,GstOmfYuvSrc))
+#define GST_OMF_YUV_SRC_CLASS(klass) \
+  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_OMF_YUV_SRC,GstOmfYuvSrcClass))
+#define GST_IS_OMF_YUV_SRC(obj) \
+  (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_OMF_YUV_SRC))
+#define GST_IS_OMF_YUV_SRC_CLASS(klass) \
+  (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_OMF_YUV_SRC))
 
 /**
- * The gop type h264 support.
- */
-
-typedef enum {
-  OMF_H264_SRC_GOP_TYPE_IBBP = 0,
-  OMF_H264_SRC_GOP_TYPE_IPPP,
-  OMF_H264_SRC_GOP_TYPE_IIII
-} GstOmfH264SrcGopType;
-
-
-/**
- * GstOmfH264Src:
+ * GstOmfYuvSrc:
  *
- * Opaque #GstOmfH264Src data structure.
+ * Opaque #GstOmfYuvSrc data structure.
  */
-typedef struct _GstOmfH264Src {
+typedef struct _GstOmfYuvSrc {
   GstBaseSrc     element;
 
   /*< private >*/  
@@ -75,35 +64,23 @@ typedef struct _GstOmfH264Src {
   guint			senid;
   guint			width;
   guint			height;
-  guint			gop;
-  GstOmfH264SrcGopType		goptype;
-  guint			framerate;
-  guint			bitrate;
-  gchar*		codec;
 
-  guint			prerecidx;
-  gchar*		prerecpipe;
-
-  guint			shareidx;
-
-  guint			cache;
-
-  gboolean		lowbw;
+  gboolean		interlaced;
 
   gchar*		media;
 
   gpointer 		omf_hd;
-} GstOmfH264Src;
+} GstOmfYuvSrc;
 
-typedef struct _GstOmfH264SrcClass {
+typedef struct _GstOmfYuvSrcClass {
   GstBaseSrcClass parent_class;
 
   /*< public >*/
   /* signals */
   void (*handoff) (GstElement *element, GstBuffer *buf, GstPad *pad);
-} GstOmfH264SrcClass;
+} GstOmfYuvSrcClass;
 
-G_GNUC_INTERNAL GType gst_omf_h264_src_get_type (void);
+G_GNUC_INTERNAL GType gst_omf_yuv_src_get_type (void);
 
 G_END_DECLS
 

@@ -50,7 +50,7 @@ static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
     GST_STATIC_CAPS("audio/,"
 	    "rate = (int) [ 1, 48000 ],"
 		"channels = (int) [ 1, 2 ]"
-		));
+	));
 
 GST_DEBUG_CATEGORY_STATIC (gst_omf_aud_src_debug);
 #define GST_CAT_DEFAULT gst_omf_aud_src_debug
@@ -71,8 +71,8 @@ enum
 #define DEFAULT_RATE			16000
 #define DEFAULT_CHANNEL			1
 #define DEFAULT_CODEC			NULL
-#define DEFAULT_AEC				NULL
-#define	DEFAULT_ANS				NULL
+#define DEFAULT_AEC				OMF_AUD_SRC_AEC_LEVEL_NONE
+#define	DEFAULT_ANS				OMF_AUD_SRC_ANS_MODE_NONE
 #define DEFAULT_ALC				NULL
 #define	DEFAULT_PREREC_IDX		0
 #define DEFAULT_PREREC_PIPE		NULL
@@ -100,8 +100,50 @@ enum
   PROP_PREREC_PIPE,
   PROP_SHARE,
   PROP_CACHE,  
+  PROP_MEDIA,
   PROP_LAST,
 };
+
+#define GST_OMF_AUD_AEC_LEVEL (gst_omf_aud_src_get_aec_level())
+static GType
+gst_omf_aud_src_get_aec_level (void)
+{
+  static GType omfaudsrc_aec_level_type = 0;
+  static const GEnumValue omfaudsrc_aec_level[] = {
+	{OMF_AUD_SRC_AEC_LEVEL_NONE, "Do not use AEC", ""},
+	{OMF_AUD_SRC_AEC_LEVEL_L, "Level low", "Low"},
+	{OMF_AUD_SRC_AEC_LEVEL_M, "Level middle", "Middle"},
+	{OMF_AUD_SRC_AEC_LEVEL_H, "Level high", "High"},
+	{0, NULL, NULL},
+  };
+
+  if (!omfaudsrc_aec_level_type) {
+	omfaudsrc_aec_level_type =
+		g_enum_register_static ("GstOmfAudSrcAecLevel", omfaudsrc_aec_level);
+  }
+  return omfaudsrc_aec_level_type;
+}
+
+#define GST_OMF_AUD_ANS_MODE (gst_omf_aud_src_get_ans_mode())
+static GType
+gst_omf_aud_src_get_ans_mode (void)
+{
+  static GType omfaudsrc_ans_mode_type = 0;
+  static const GEnumValue omfaudsrc_ans_mode[] = {
+	{OMF_AUD_SRC_ANS_MODE_NONE, "Do not use ANS", ""},
+	{OMF_AUD_SRC_ANS_MODE_MILD, "Mode mild", "Mild"},
+	{OMF_AUD_SRC_ANS_MODE_MEDIUM, "Mode medium", "Medium"},
+	{OMF_AUD_SRC_ANS_MODE_AGGRESSIVE, "Mode aggresive", "Aggressive"},
+	{0, NULL, NULL},
+  };
+
+  if (!omfaudsrc_ans_mode_type) {
+	omfaudsrc_ans_mode_type =
+		g_enum_register_static ("GstOmfAudSrcAnsMode", omfaudsrc_ans_mode);
+  }
+  return omfaudsrc_ans_mode_type;
+}
+
 
 #define _do_init \
     GST_DEBUG_CATEGORY_INIT (gst_omf_aud_src_debug, "omfaudsrc", 0, "omfaudsrc element");
@@ -183,18 +225,13 @@ gst_omf_aud_src_class_init (GstOmfAudSrcClass * klass)
 	  											"\t\t\t   (5): opus:framesize=100,application=voip,complexity=1", NULL,
 		  G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_AEC,
-		g_param_spec_string ("aec", "AEC", "Set automatic echo cancellation, optional:\n"
-												"\t\t\t   (1): keys=webrtc,level=0 \n"
-												"\t\t\t   (2): keys=webrtc,level=1 \n"
-												"\t\t\t   (3): keys=webrtc,level=2 ", NULL,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));  
-  g_object_class_install_property (gobject_class, PROP_ANS,
-		g_param_spec_string ("ans", "ANS", "Set automatic noise suppression, optional:\n"
-												"\t\t\t   (1): keys=webrtc,ansmode=0 \n"
-												"\t\t\t   (2): keys=webrtc,ansmode=1 \n"
-												"\t\t\t   (3): keys=webrtc,ansmode=2 \n"
-												"\t\t\t   (4): keys=webrtc,ansmode=3", NULL,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+      g_param_spec_enum ("aec-level", "AEC level",
+          "Automatic echo cancellation level", GST_OMF_AUD_AEC_LEVEL,
+          DEFAULT_AEC, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_AEC,
+	   g_param_spec_enum ("ans-mode", "ANS mode",
+		   "Automatic noise suppression mode", GST_OMF_AUD_ANS_MODE,
+		   DEFAULT_ANS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_ALC,
 		g_param_spec_string ("alc", "ALC", "Set automatic level control", NULL,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
@@ -213,6 +250,9 @@ gst_omf_aud_src_class_init (GstOmfAudSrcClass * klass)
 	   g_param_spec_int ("cache", "Cache", "Set cache for frame", 0,
 		   1024, DEFAULT_CACHE,
 		   G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_MEDIA,
+	   g_param_spec_string ("media-info", "Media information", "Get media information", NULL,
+		   G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)); 
 
   gst_element_class_set_static_metadata (gstelement_class,
       "Omf Audio Source",
@@ -242,8 +282,8 @@ gst_omf_aud_src_init (GstOmfAudSrc * omfaudsrc)
   omfaudsrc->rate = DEFAULT_RATE;
   omfaudsrc->channel = DEFAULT_CHANNEL;
   omfaudsrc->codec = DEFAULT_CODEC ? strdup(DEFAULT_CODEC) : NULL;
-  omfaudsrc->aec = DEFAULT_AEC ? strdup(DEFAULT_AEC) : NULL;
-  omfaudsrc->ans = DEFAULT_ANS ? strdup(DEFAULT_ANS) : NULL;
+  omfaudsrc->aec = DEFAULT_AEC;
+  omfaudsrc->ans = DEFAULT_ANS;
   omfaudsrc->alc = DEFAULT_ALC ? strdup(DEFAULT_ALC) : NULL;
   omfaudsrc->prerecidx = DEFAULT_PREREC_IDX;
   omfaudsrc->prerecpipe = DEFAULT_PREREC_PIPE ? strdup(DEFAULT_PREREC_PIPE) : NULL;
@@ -270,10 +310,6 @@ gst_omf_aud_src_finalize (GObject * object)
 
   g_free(src->codec);
   src->codec = NULL;
-  g_free(src->aec);
-  src->aec = NULL;
-  g_free(src->ans);
-  src->ans = NULL;
   g_free(src->alc);
   src->alc = NULL;
   g_free(src->prerecpipe);
@@ -351,12 +387,10 @@ gst_omf_aud_src_set_property (GObject * object, guint prop_id,
 		src->codec = g_strdup(g_value_get_string(value));
 		break;
 	case PROP_AEC:
-		g_free (src->aec);
-		src->aec = g_strdup(g_value_get_string(value));
+		src->aec = (GstOmfAudSrcAecLevel)g_value_get_enum(value);
 		break;
 	case PROP_ANS:
-		g_free (src->ans);
-		src->ans = g_strdup(g_value_get_string(value));
+		src->ans = (GstOmfAudSrcAnsMode)g_value_get_enum(value);
 		break;
 	case PROP_ALC:
 		g_free (src->alc);
@@ -421,10 +455,10 @@ gst_omf_aud_src_get_property (GObject * object, guint prop_id, GValue * value,
 		g_value_set_string(value, src->codec);
 		break;
 	case PROP_AEC:
-		g_value_set_string(value, src->aec);
+		g_value_set_enum(value, src->aec);
 		break;
 	case PROP_ANS:
-		g_value_set_string(value, src->ans);
+		g_value_set_enum(value, src->ans);
 		break;
 	case PROP_ALC:
 		g_value_set_string(value, src->alc);
@@ -440,6 +474,9 @@ gst_omf_aud_src_get_property (GObject * object, guint prop_id, GValue * value,
 		break;
 	case PROP_CACHE:
 		g_value_set_int(value, src->cache);
+		break;
+	case PROP_MEDIA:
+		g_value_set_string(value, src->media);
 		break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -526,6 +563,8 @@ gst_omf_aud_src_create (GstBaseSrc * basesrc, guint64 offset, guint length,
 	  	///
 		GST_BUFFER_PTS(buf) = frame.pts_ms;
 		GST_BUFFER_DTS(buf) = frame.pts_ms;
+	  	GST_BUFFER_OFFSET(buf) = frame.index;	
+		GST_MINI_OBJECT_CAST (buf)->flags = frame.iskeyframe;
 	  }
 	}
   }
@@ -612,10 +651,10 @@ gst_omf_aud_src_start (GstBaseSrc * basesrc)
   if(src->codec){
 	OmfAudSrcSetCodec(src->omf_hd, src->codec);
   }
-  if(src->aec){
+  if(src->aec != OMF_AUD_SRC_AEC_LEVEL_NONE){
 	OmfAudSrcSetAEC(src->omf_hd, src->aec);	
   }
-  if(src->ans){
+  if(src->ans != OMF_AUD_SRC_ANS_MODE_NONE){
 	OmfAudSrcSetANS(src->omf_hd, src->ans);
   }
   if(src->alc){
@@ -633,6 +672,9 @@ gst_omf_aud_src_start (GstBaseSrc * basesrc)
   if(src->cache){
 	OmfAudSrcSetCache(src->omf_hd, src->cache);
   }
+
+  src->media = OmfAudSrcGetMediaInfo(src->omf_hd);
+  g_strdup_printf ("media info:%s", src->media);
    
   return OmfAudSrcStatusUp(src->omf_hd, OMF_STATE_PLAYING);
 }

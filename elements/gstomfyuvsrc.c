@@ -2,7 +2,7 @@
  * Copyright (C) 1999,2000 Erik Walthinsen <omega@cse.ogi.edu>
  *                    2000 Wim Taymans <wim@fluendo.com>
  *
- * gstomfjpegsrc.c:
+ * gstomfyuvsrc.c:
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -20,16 +20,16 @@
  * Boston, MA 02110-1301, USA.
  */
 /**
- * SECTION:element-omfjpegsrc
- * @title: omfjpegsrc
+ * SECTION:element-omfyuvsrc
+ * @title: omfyuvsrc
  * @see_also: #GstPcmSink
  *
- * The jpegsrc element is a source to get jpeg data.
+ * The yuvsrc element is a source to get yuv data.
  *
  * ## Example launch line
  * |[
- * gst-launch-1.0 -v omfjpegsrc qp=80 ! fakesink
- * ]| This pipeline will push jpeg data to the fakesink element.
+ * gst-launch-1.0 -v omfyuvsrc ! fakesink
+ * ]| This pipeline will push yuv data to the fakesink element.
  *
  */
 
@@ -42,20 +42,20 @@
 #include <string.h>
 
 //#include "gstelements_private.h"
-#include "gstomfjpegsrc.h"
+#include "gstomfyuvsrc.h"
 
 static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS("image/jpeg,"
+    GST_STATIC_CAPS("video/x-raw,"
 		"width = (int) [ 480, 4096 ],"
 		"height = (int) [ 320, 2160 ]"
 	));
 
-GST_DEBUG_CATEGORY_STATIC (gst_omf_jpeg_src_debug);
-#define GST_CAT_DEFAULT gst_omf_jpeg_src_debug
+GST_DEBUG_CATEGORY_STATIC (gst_omf_yuv_src_debug);
+#define GST_CAT_DEFAULT gst_omf_yuv_src_debug
 
-/* OmfJpegSrc signals and args */
+/* OmfYuvSrc signals and args */
 enum
 {
   /* FILL ME */
@@ -70,9 +70,7 @@ enum
 #define DEFAULT_SENID			0
 #define DEFAULT_WIDTH			1920
 #define DEFAULT_HEIGHT			1080
-#define DEFAULT_QP				80
-#define	DEFAULT_PREREC_IDX		0
-#define DEFAULT_LOW_BW			FALSE
+#define DEFAULT_INTERLACED		FALSE
 
 enum
 {
@@ -86,40 +84,38 @@ enum
   PROP_SENID,
   PROP_WIDTH,
   PROP_HEIGHT,
-  PROP_QP,
-  PROP_PREREC_IDX,
-  PROP_LOW_BW,
+  PROP_INTERLACED,
   PROP_MEDIA,
   PROP_LAST,
 };
 
 #define _do_init \
-    GST_DEBUG_CATEGORY_INIT (gst_omf_jpeg_src_debug, "omfjpegsrc", 0, "omfjpegsrc element");
-#define gst_omf_jpeg_src_parent_class parent_class
-G_DEFINE_TYPE_WITH_CODE (GstOmfJpegSrc, gst_omf_jpeg_src, GST_TYPE_BASE_SRC, _do_init);
+    GST_DEBUG_CATEGORY_INIT (gst_omf_yuv_src_debug, "omfyuvsrc", 0, "omfyuvsrc element");
+#define gst_omf_yuv_src_parent_class parent_class
+G_DEFINE_TYPE_WITH_CODE (GstOmfYuvSrc, gst_omf_yuv_src, GST_TYPE_BASE_SRC, _do_init);
 
-static void gst_omf_jpeg_src_finalize (GObject * object);
-static void gst_omf_jpeg_src_set_property (GObject * object, guint prop_id,
+static void gst_omf_yuv_src_finalize (GObject * object);
+static void gst_omf_yuv_src_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
-static void gst_omf_jpeg_src_get_property (GObject * object, guint prop_id,
+static void gst_omf_yuv_src_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-static gboolean gst_omf_jpeg_src_start (GstBaseSrc * basesrc);
-static gboolean gst_omf_jpeg_src_stop (GstBaseSrc * basesrc);
-static gboolean gst_omf_jpeg_src_is_seekable (GstBaseSrc * basesrc);
+static gboolean gst_omf_yuv_src_start (GstBaseSrc * basesrc);
+static gboolean gst_omf_yuv_src_stop (GstBaseSrc * basesrc);
+static gboolean gst_omf_yuv_src_is_seekable (GstBaseSrc * basesrc);
 
-static gboolean gst_omf_jpeg_src_event_handler (GstBaseSrc * src, GstEvent * event);
-static void gst_omf_jpeg_src_get_times (GstBaseSrc * basesrc, GstBuffer * buffer,
+static gboolean gst_omf_yuv_src_event_handler (GstBaseSrc * src, GstEvent * event);
+static void gst_omf_yuv_src_get_times (GstBaseSrc * basesrc, GstBuffer * buffer,
     GstClockTime * start, GstClockTime * end);
-static GstFlowReturn gst_omf_jpeg_src_create (GstBaseSrc * src, guint64 offset,
+static GstFlowReturn gst_omf_yuv_src_create (GstBaseSrc * src, guint64 offset,
     guint length, GstBuffer ** buf);
 
-static guint gst_omf_jpeg_src_signals[LAST_SIGNAL] = { 0 };
+static guint gst_omf_yuv_src_signals[LAST_SIGNAL] = { 0 };
 
 static GParamSpec *pspec_last_message = NULL;
 
 static void
-gst_omf_jpeg_src_class_init (GstOmfJpegSrcClass * klass)
+gst_omf_yuv_src_class_init (GstOmfYuvSrcClass * klass)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
@@ -129,10 +125,10 @@ gst_omf_jpeg_src_class_init (GstOmfJpegSrcClass * klass)
   gstelement_class = GST_ELEMENT_CLASS (klass);
   gstbase_src_class = GST_BASE_SRC_CLASS (klass);
 
-  gobject_class->finalize = gst_omf_jpeg_src_finalize;
+  gobject_class->finalize = gst_omf_yuv_src_finalize;
 
-  gobject_class->set_property = gst_omf_jpeg_src_set_property;
-  gobject_class->get_property = gst_omf_jpeg_src_get_property;
+  gobject_class->set_property = gst_omf_yuv_src_set_property;
+  gobject_class->get_property = gst_omf_yuv_src_get_property;
 
   g_object_class_install_property (gobject_class, PROP_SILENT,
       g_param_spec_boolean ("silent", "Silent",
@@ -151,7 +147,7 @@ gst_omf_jpeg_src_class_init (GstOmfJpegSrcClass * klass)
   g_object_class_install_property (gobject_class, PROP_LAST_MESSAGE,
       pspec_last_message);
 
-  /*OMF jpeg source parameter*/
+  /*OMF yuv source parameter*/
   g_object_class_install_property (gobject_class, PROP_SENID,
       g_param_spec_int ("senid", "Sensor id", "The sensor id", 0,
           3, DEFAULT_SENID,
@@ -164,76 +160,70 @@ gst_omf_jpeg_src_class_init (GstOmfJpegSrcClass * klass)
       g_param_spec_int ("height", "Height", "Height of resolution", 320,
           2160, DEFAULT_HEIGHT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-  g_object_class_install_property (gobject_class, PROP_QP,
-      g_param_spec_int ("qp", "QP", "Jpeg encode qp", 0,
-          80, DEFAULT_QP,
+  g_object_class_install_property (gobject_class, PROP_INTERLACED,
+      g_param_spec_boolean ("interlaced", "Interlaced",
+          "Enable yuv interlaced", DEFAULT_INTERLACED,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-  g_object_class_install_property (gobject_class, PROP_PREREC_IDX,
-	   g_param_spec_int ("prerec-idx", "Prerecord index", "Link the default prerecord pipeline", 0,
-		   1, DEFAULT_PREREC_IDX,
-		   G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_MEDIA,
 	  g_param_spec_string ("media-info", "Media information", "Get media information", NULL,
 	   	  G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)); 
 
   gst_element_class_set_static_metadata (gstelement_class,
-      "Omf Jpeg Source",
+      "Omf Yuv Source",
       "Source",
-      "Push jpeg data out",
+      "Push yuv data out",
       "wang.zhou@icatchtek.com");
   gst_element_class_add_static_pad_template (gstelement_class, &srctemplate);
 
-  gstbase_src_class->is_seekable = GST_DEBUG_FUNCPTR (gst_omf_jpeg_src_is_seekable);
-  gstbase_src_class->start = GST_DEBUG_FUNCPTR (gst_omf_jpeg_src_start);
-  gstbase_src_class->stop = GST_DEBUG_FUNCPTR (gst_omf_jpeg_src_stop);
-  gstbase_src_class->event = GST_DEBUG_FUNCPTR (gst_omf_jpeg_src_event_handler);
-  gstbase_src_class->get_times = GST_DEBUG_FUNCPTR (gst_omf_jpeg_src_get_times);
-  gstbase_src_class->create = GST_DEBUG_FUNCPTR (gst_omf_jpeg_src_create);
+  gstbase_src_class->is_seekable = GST_DEBUG_FUNCPTR (gst_omf_yuv_src_is_seekable);
+  gstbase_src_class->start = GST_DEBUG_FUNCPTR (gst_omf_yuv_src_start);
+  gstbase_src_class->stop = GST_DEBUG_FUNCPTR (gst_omf_yuv_src_stop);
+  gstbase_src_class->event = GST_DEBUG_FUNCPTR (gst_omf_yuv_src_event_handler);
+  gstbase_src_class->get_times = GST_DEBUG_FUNCPTR (gst_omf_yuv_src_get_times);
+  gstbase_src_class->create = GST_DEBUG_FUNCPTR (gst_omf_yuv_src_create);
 }
 
 static void
-gst_omf_jpeg_src_init (GstOmfJpegSrc * omfjpegsrc)
+gst_omf_yuv_src_init (GstOmfYuvSrc * omfyuvsrc)
 {
-  omfjpegsrc->silent = DEFAULT_SILENT;
-  omfjpegsrc->signal_handoffs = DEFAULT_SIGNAL_HANDOFFS;
-  omfjpegsrc->dump = DEFAULT_DUMP;
-  omfjpegsrc->format = DEFAULT_FORMAT;
-  omfjpegsrc->last_message = NULL;
+  omfyuvsrc->silent = DEFAULT_SILENT;
+  omfyuvsrc->signal_handoffs = DEFAULT_SIGNAL_HANDOFFS;
+  omfyuvsrc->dump = DEFAULT_DUMP;
+  omfyuvsrc->format = DEFAULT_FORMAT;
+  omfyuvsrc->last_message = NULL;
 
-  omfjpegsrc->senid = DEFAULT_SENID;
-  omfjpegsrc->width = DEFAULT_WIDTH;
-  omfjpegsrc->height = DEFAULT_HEIGHT;
-  omfjpegsrc->qp = DEFAULT_QP;
-  omfjpegsrc->prerecidx = DEFAULT_PREREC_IDX;
-  omfjpegsrc->lowbw = DEFAULT_LOW_BW;
-  omfjpegsrc->media = NULL;
+  omfyuvsrc->senid = DEFAULT_SENID;
+  omfyuvsrc->width = DEFAULT_WIDTH;
+  omfyuvsrc->height = DEFAULT_HEIGHT;
+  omfyuvsrc->interlaced = DEFAULT_INTERLACED;  
+  omfyuvsrc->media = NULL;
 
-  omfjpegsrc->omf_hd = OmfJpegSrcCreate();
+  omfyuvsrc->omf_hd = OmfYuvSrcCreate();
 
 }
 
 static void
-gst_omf_jpeg_src_finalize (GObject * object)
+gst_omf_yuv_src_finalize (GObject * object)
 {
-  GstOmfJpegSrc *src;
+  GstOmfYuvSrc *src;
 
-  src = GST_OMF_JPEG_SRC (object);
+  src = GST_OMF_YUV_SRC (object);
 
   g_free (src->last_message);
   
   if(src->omf_hd){
-	 OmfJpegSrcDestory(src->omf_hd);
+	 OmfYuvSrcDestory(src->omf_hd);
   }
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
 
 static gboolean
-gst_omf_jpeg_src_event_handler (GstBaseSrc * basesrc, GstEvent * event)
+gst_omf_yuv_src_event_handler (GstBaseSrc * basesrc, GstEvent * event)
 {
-  GstOmfJpegSrc *src;
+  GstOmfYuvSrc *src;
 
-  src = GST_OMF_JPEG_SRC (basesrc);
+  src = GST_OMF_YUV_SRC (basesrc);
 
   if (!src->silent) {
     const GstStructure *s;
@@ -264,13 +254,13 @@ gst_omf_jpeg_src_event_handler (GstBaseSrc * basesrc, GstEvent * event)
 }
 
 static void
-gst_omf_jpeg_src_set_property (GObject * object, guint prop_id,
+gst_omf_yuv_src_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstOmfJpegSrc *src;
+  GstOmfYuvSrc *src;
   GstBaseSrc *basesrc;
 
-  src = GST_OMF_JPEG_SRC (object);
+  src = GST_OMF_YUV_SRC (object);
   basesrc = GST_BASE_SRC (object);
 
   switch (prop_id) {
@@ -292,14 +282,8 @@ gst_omf_jpeg_src_set_property (GObject * object, guint prop_id,
 	case PROP_HEIGHT:
 		src->height = g_value_get_int(value);
 		break;
-	case PROP_QP:
-		src->qp = g_value_get_int(value);
-		break;
-	case PROP_PREREC_IDX:
-		src->prerecidx = g_value_get_int(value);
-		break;
-	case PROP_LOW_BW:
-		src->lowbw = g_value_get_boolean(value);
+	case PROP_INTERLACED:
+		src->interlaced = g_value_get_boolean(value);
 		break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -308,15 +292,15 @@ gst_omf_jpeg_src_set_property (GObject * object, guint prop_id,
 }
 
 static void
-gst_omf_jpeg_src_get_property (GObject * object, guint prop_id, GValue * value,
+gst_omf_yuv_src_get_property (GObject * object, guint prop_id, GValue * value,
     GParamSpec * pspec)
 {
-  GstOmfJpegSrc *src;
+  GstOmfYuvSrc *src;
   GstBaseSrc *basesrc;
 
-  g_return_if_fail (GST_IS_OMF_JPEG_SRC (object));
+  g_return_if_fail (GST_IS_OMF_YUV_SRC (object));
 
-  src = GST_OMF_JPEG_SRC (object);
+  src = GST_OMF_YUV_SRC (object);
   basesrc = GST_BASE_SRC (object);
 
   switch (prop_id) {
@@ -343,18 +327,12 @@ gst_omf_jpeg_src_get_property (GObject * object, guint prop_id, GValue * value,
 	case PROP_HEIGHT:
 		g_value_set_int(value, src->height);
 		break;
-	case PROP_QP:
-		g_value_set_int(value, src->qp);
-		break;
-	case PROP_PREREC_IDX:
-		g_value_set_int(value, src->prerecidx);
-		break;
-	case PROP_LOW_BW:
-		g_value_set_boolean(value, src->lowbw);
+	case PROP_INTERLACED:
+		g_value_set_boolean(value, src->interlaced);
 		break;
 	case PROP_MEDIA:
-		g_value_set_string (value, src->media);
-		break;
+      	g_value_set_string (value, src->media);
+      	break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -362,7 +340,7 @@ gst_omf_jpeg_src_get_property (GObject * object, guint prop_id, GValue * value,
 }
 
 static GstBuffer *
-gst_omf_jpeg_src_alloc_buffer (GstOmfJpegSrc * src, guint size, gpointer pdata, GDestroyNotify pfree)
+gst_omf_yuv_src_alloc_buffer (GstOmfYuvSrc * src, guint size, gpointer pdata, GDestroyNotify pfree)
 {
   GstBuffer *buf;
   gpointer data;
@@ -385,12 +363,12 @@ gst_omf_jpeg_src_alloc_buffer (GstOmfJpegSrc * src, guint size, gpointer pdata, 
 }
 
 static void
-gst_omf_jpeg_src_get_times (GstBaseSrc * basesrc, GstBuffer * buffer,
+gst_omf_yuv_src_get_times (GstBaseSrc * basesrc, GstBuffer * buffer,
     GstClockTime * start, GstClockTime * end)
 {
-  GstOmfJpegSrc *src;
+  GstOmfYuvSrc *src;
 
-  src = GST_OMF_JPEG_SRC (basesrc);
+  src = GST_OMF_YUV_SRC (basesrc);
 #if 0
   /* sync on the timestamp of the buffer if requested. */
   if (src->sync) {
@@ -417,30 +395,31 @@ gst_omf_jpeg_src_get_times (GstBaseSrc * basesrc, GstBuffer * buffer,
 }
 
 static GstFlowReturn
-gst_omf_jpeg_src_create (GstBaseSrc * basesrc, guint64 offset, guint length,
+gst_omf_yuv_src_create (GstBaseSrc * basesrc, guint64 offset, guint length,
     GstBuffer ** ret)
 {
-  GstOmfJpegSrc *src;
+  GstOmfYuvSrc *src;
   GstBuffer *buf;
   GstMapInfo info;
   GstClockTime time;
   gsize size = 0;
 
-  src = GST_OMF_JPEG_SRC (basesrc);
+  src = GST_OMF_YUV_SRC (basesrc);
 
   OmfFrameC_t frame;
   memset(&frame, 0, sizeof(OmfFrameC_t));
   
-  if(OmfJpegSrcGetFrame(src->omf_hd, &frame)){
+  if(OmfYuvSrcGetFrame(src->omf_hd, &frame)){
   	if(frame.data){
 	  size = frame.size;
 	 
-	  buf =  gst_omf_jpeg_src_alloc_buffer (src, size, frame.data, frame.free);
+	  buf =  gst_omf_yuv_src_alloc_buffer (src, size, frame.data, frame.free);
 	  if(buf){
 		///
 		GST_BUFFER_PTS(buf) = frame.pts_ms;
 		GST_BUFFER_DTS(buf) = frame.pts_ms;
 		GST_BUFFER_OFFSET(buf) = frame.index;	
+		GST_MINI_OBJECT_CAST (buf)->flags = frame.iskeyframe;
 	  }
 	}	
   }
@@ -488,7 +467,7 @@ gst_omf_jpeg_src_create (GstBaseSrc * basesrc, guint64 offset, guint length,
 
   if (src->signal_handoffs) {
     GST_LOG_OBJECT (src, "pre handoff emit");
-    g_signal_emit (src, gst_omf_jpeg_src_signals[SIGNAL_HANDOFF], 0, buf,
+    g_signal_emit (src, gst_omf_yuv_src_signals[SIGNAL_HANDOFF], 0, buf,
         basesrc->srcpad);
     GST_LOG_OBJECT (src, "post handoff emit");
   }
@@ -508,11 +487,11 @@ gst_omf_jpeg_src_create (GstBaseSrc * basesrc, guint64 offset, guint length,
 }
 
 static gboolean
-gst_omf_jpeg_src_start (GstBaseSrc * basesrc)
+gst_omf_yuv_src_start (GstBaseSrc * basesrc)
 {
-  GstOmfJpegSrc *src;
+  GstOmfYuvSrc *src;
 
-  src = GST_OMF_JPEG_SRC (basesrc);
+  src = GST_OMF_YUV_SRC (basesrc);
 
   src->bytes_sent = 0;
 
@@ -520,32 +499,29 @@ gst_omf_jpeg_src_start (GstBaseSrc * basesrc)
 
   g_return_val_if_fail(src->omf_hd, FALSE);
 
-  g_return_val_if_fail(OmfJpegSrcSelectSensor(src->omf_hd, src->senid), FALSE);
+  g_return_val_if_fail(OmfYuvSrcSelectSensor(src->omf_hd, src->senid), FALSE);
   if(src->width){
-  	g_return_val_if_fail(OmfJpegSrcSetWidth(src->omf_hd, src->width), FALSE);
+  	g_return_val_if_fail(OmfYuvSrcSetWidth(src->omf_hd, src->width), FALSE);
   }
   if(src->height){
-  	g_return_val_if_fail(OmfJpegSrcSetHeight(src->omf_hd, src->height), FALSE);
+  	g_return_val_if_fail(OmfYuvSrcSetHeight(src->omf_hd, src->height), FALSE);
+  }	
+  if(src->interlaced){
+  	g_return_val_if_fail(OmfYuvSrcSetInterlaced(src->omf_hd, src->interlaced), FALSE);
   }
-  if(src->prerecidx){
-  	g_return_val_if_fail(OmfJpegSrcSetPreRecord(src->omf_hd, src->prerecidx), FALSE);
-  }		
-  //if(src->lowbw){
-  //	g_return_val_if_fail(OmfJpegSrcSetLowBandWidth(src->omf_hd, src->lowbw), FALSE);
-  //}
 
-  src->media = OmfJpegSrcGetMediaInfo(src->omf_hd);
+  src->media = OmfYuvSrcGetMediaInfo(src->omf_hd);
   g_strdup_printf ("media info:%s", src->media);
    
-  return OmfJpegSrcStatusUp(src->omf_hd, OMF_STATE_PLAYING);
+  return OmfYuvSrcStatusUp(src->omf_hd, OMF_STATE_PLAYING);
 }
 
 static gboolean
-gst_omf_jpeg_src_stop (GstBaseSrc * basesrc)
+gst_omf_yuv_src_stop (GstBaseSrc * basesrc)
 {
-  GstOmfJpegSrc *src;
+  GstOmfYuvSrc *src;
 
-  src = GST_OMF_JPEG_SRC (basesrc);
+  src = GST_OMF_YUV_SRC (basesrc);
 
   GST_OBJECT_LOCK (src);
 
@@ -555,16 +531,16 @@ gst_omf_jpeg_src_stop (GstBaseSrc * basesrc)
   GST_OBJECT_UNLOCK (src);
 
   if(src->omf_hd){
-  	OmfJpegSrcStatusDown(src->omf_hd, OMF_STATE_NULL);
+  	OmfYuvSrcStatusDown(src->omf_hd, OMF_STATE_NULL);
   }
 
   return TRUE;
 }
 
 static gboolean
-gst_omf_jpeg_src_is_seekable (GstBaseSrc * basesrc)
+gst_omf_yuv_src_is_seekable (GstBaseSrc * basesrc)
 {
-  GstOmfJpegSrc *src = GST_OMF_JPEG_SRC (basesrc);
+  GstOmfYuvSrc *src = GST_OMF_YUV_SRC (basesrc);
 
   return FALSE;
 }

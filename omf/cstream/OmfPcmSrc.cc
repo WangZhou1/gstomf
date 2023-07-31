@@ -80,24 +80,30 @@ EXTERNC BOOL OmfPcmSrcSetChannel(void* hd, unsigned int channel){
 	return TRUE;
 }
 
-EXTERNC BOOL OmfPcmSrcSetAEC(void* hd, const char* para){
+EXTERNC BOOL OmfPcmSrcSetAEC(void* hd, int level){
 	returnIfC1(FALSE, !hd);
-	returnIfC1(FALSE, !para);
+	returnIfC1(FALSE, !level);
 	
 	auto src = OBJECT_CONVERT(hd, IPcmSource);
 	returnIfC1(FALSE, !src->IsSupportAEC());
 
-	return src->SetAEC(TRUE, para);
+	char aec[64];
+	sprintf(aec,"keys=webrtc,level=%d,samples=1600", level-1);
+
+	return src->SetAEC(TRUE, aec);
 }
 
-EXTERNC BOOL OmfPcmSrcSetANS(void* hd, const char* para){
+EXTERNC BOOL OmfPcmSrcSetANS(void* hd, int mode){
 	returnIfC1(FALSE, !hd);
-	returnIfC1(FALSE, !para);
+	returnIfC1(FALSE, !mode);
 	
 	auto src = OBJECT_CONVERT(hd, IPcmSource);
 	returnIfC1(FALSE, !src->IsSupportANS());
+
+	char ans[64];
+	sprintf(ans,"keys=webrtc,mode=%d,samples=1600", mode-1);
 	
-	return src->SetANS(TRUE, para);
+	return src->SetANS(TRUE, ans);
 }
 
 EXTERNC BOOL OmfPcmSrcSetPreRecord(void* hd, unsigned group){
@@ -128,13 +134,15 @@ EXTERNC BOOL OmfPcmSrcSetCache(void* hd, unsigned cache){
 	return src->SetCache(cache);
 }
 
-EXTERNC const char* OmfPcmSrcGetMediaString(void* hd){
-	returnIfC1(0, !hd);
-	auto src = OBJECT_CONVERT(hd, IPcmSource);
-	if(src->CurrentState() != State::null){
-		
-	}
-	return 0;
-}
+EXTERNC const char* OmfPcmSrcGetMediaInfo(void* hd){
+	returnIfC1(FALSE, !hd);
 
+	auto src = OBJECT_CONVERT(hd, IPcmSource);
+		
+	if(src->CurrentState() == State::null){
+		returnIfC1(NULL, !src->ChangeUp(State::ready));
+	}
+
+	return src->GetPcmMediaInfo().media.c_str();
+}
 

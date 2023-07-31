@@ -44,6 +44,29 @@ G_BEGIN_DECLS
   (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_OMF_PCM_SRC))
 
 /**
+ * The AEC Level.
+ */
+
+typedef enum {
+  OMF_PCM_SRC_AEC_LEVEL_NONE = 0,
+  OMF_PCM_SRC_AEC_LEVEL_L,
+  OMF_PCM_SRC_AEC_LEVEL_M,
+  OMF_PCM_SRC_AEC_LEVEL_H
+} GstOmfPcmSrcAecLevel;
+
+/**
+ * The ANS MODE.
+ */
+
+typedef enum {
+  OMF_PCM_SRC_ANS_MODE_NONE = 0,
+  OMF_PCM_SRC_ANS_MODE_MILD ,
+  OMF_PCM_SRC_ANS_MODE_MEDIUM,
+  OMF_PCM_SRC_ANS_MODE_AGGRESSIVE,
+} GstOmfPcmSrcAnsMode;
+
+
+/**
  * GstOmfPcmSrc:
  *
  * Opaque #GstOmfPcmSrc data structure.
@@ -64,13 +87,15 @@ typedef struct _GstOmfPcmSrc {
   guint			rate;
   guint			channel;
 
-  gchar*		aec;
-  gchar*		ans;
+  GstOmfPcmSrcAecLevel		aec;
+  GstOmfPcmSrcAnsMode		ans;
   
   guint			prerecidx;
   gchar*		prerecpipe;
 
   guint			cache;
+  
+  gchar*	 	media;
 
   gpointer 		omf_hd;
 } GstOmfPcmSrc;

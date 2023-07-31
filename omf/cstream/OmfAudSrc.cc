@@ -96,24 +96,30 @@ EXTERNC BOOL OmfAudSrcSetCodec(void* hd, const char* codec){
 	return src->SetCodec(codec);
 }
 
-EXTERNC BOOL OmfAudSrcSetAEC(void* hd, const char* para){
+EXTERNC BOOL OmfAudSrcSetAEC(void* hd, int level){
 	returnIfC1(FALSE, !hd);
-	returnIfC1(FALSE, !para)
+	returnIfC1(FALSE, !level);
 
 	auto src = OBJECT_CONVERT(hd, IAudioSource);
 	returnIfC1(FALSE, !src->IsSupportAEC());
+
+	char aec[64];
+	sprintf(aec,"keys=webrtc,level=%d,samples=1600", level-1);
 	
-	return src->SetAEC(TRUE, para);
+	return src->SetAEC(TRUE, aec);
 }
 
-EXTERNC BOOL OmfAudSrcSetANS(void* hd, const char* para){
+EXTERNC BOOL OmfAudSrcSetANS(void* hd, int mode){
 	returnIfC1(FALSE, !hd);
-	returnIfC1(FALSE, !para)
+	returnIfC1(FALSE, !mode);
 
 	auto src = OBJECT_CONVERT(hd, IAudioSource);
 	returnIfC1(FALSE, !src->IsSupportANS());
+
+	char ans[64];
+	sprintf(ans,"keys=webrtc,mode=%d,samples=1600", mode-1);
 	
-	return src->SetANS(TRUE, para);
+	return src->SetANS(TRUE, ans);
 }
 
 EXTERNC BOOL OmfAudSrcSetALC(void* hd, const char* para){
@@ -148,7 +154,6 @@ EXTERNC BOOL OmfAudSrcSetSharedEncoder(void* hd, int group){
 	return src->SetSharedEncoderGroup(group);
 }
 
-
 EXTERNC BOOL OmfAudSrcSetCache(void* hd, unsigned cache){
 	returnIfC1(FALSE, !hd);
 
@@ -156,4 +161,14 @@ EXTERNC BOOL OmfAudSrcSetCache(void* hd, unsigned cache){
 	return src->SetCache(cache);
 }
 
+EXTERNC const char* OmfAudSrcGetMediaInfo(void* hd){
+	returnIfC1(FALSE, !hd);
 
+	auto src = OBJECT_CONVERT(hd, IAudioSource);
+		
+	if(src->CurrentState() == State::null){
+		returnIfC1(NULL, !src->ChangeUp(State::ready));
+	}
+
+	return src->GetAudioMediaInfo().media.c_str();
+}

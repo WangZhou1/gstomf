@@ -101,11 +101,21 @@ EXTERNC BOOL OmfH264SrcSetGop(void* hd, int gop){
 	return src->SetGop(gop);
 }
 
-EXTERNC BOOL OmfH264SrcSetGopType(void* hd, const char* goptype){
+EXTERNC BOOL OmfH264SrcSetGopType(void* hd, int goptype){
 	returnIfC1(FALSE, !hd);
 
 	auto src = OBJECT_CONVERT(hd, IH264Source);
-	return src->SetGopType(goptype);
+
+	switch(goptype){
+		case 0:
+			return src->SetGopType("IBBP");
+		case 1:
+			return src->SetGopType("IPPP");
+		case 2:
+			return src->SetGopType("IIII");	
+	}
+	
+	return FALSE;
 }
 
 EXTERNC BOOL OmfH264SrcSetFrameRate(void* hd, int fr){
@@ -164,5 +174,17 @@ EXTERNC BOOL OmfH264SrcSetLowBandWidth(void* hd, BOOL en){
 
 	auto src = OBJECT_CONVERT(hd, IH264Source);
 	return src->SetLowBandWidthEnable(en);
+}
+
+EXTERNC const char* OmfH264SrcGetMediaInfo(void* hd){
+	returnIfC1(FALSE, !hd);
+
+	auto src = OBJECT_CONVERT(hd, IH264Source);
+		
+	if(src->CurrentState() == State::null){
+		returnIfC1(NULL, !src->ChangeUp(State::ready));
+	}
+
+	return src->GetH264MediaInfo().media.c_str();
 }
 
