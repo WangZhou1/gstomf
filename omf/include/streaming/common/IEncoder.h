@@ -21,7 +21,13 @@ namespace omf {
 					 * @return true/false
 					 */
 					virtual bool IsSupportPreRecord()const=0;
-
+					/**
+					 * Check the PreRecord pipeline ready.
+					 * @param name[in] \n
+					 * 		0:Check the default prerecord pipeline
+					 * @return true/false
+					 */
+					virtual bool IsPreRecordReady(const char* name)const=0;
 					/**
 					 * set the group of PreRecord.
 					 * @param group[in] \n

@@ -122,7 +122,7 @@ namespace omf {
 				 * @return pcm media info.
 				 * @see PcmMediaInfo
 				 */
-				virtual AudioMediaInfo GetAudioMediaInfo() const =0;
+				virtual const AudioMediaInfo& GetAudioMediaInfo() =0;
 			public:
 				/**
 				 * @brief create a new IPcmSource instance.

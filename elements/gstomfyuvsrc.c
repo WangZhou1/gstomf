@@ -47,7 +47,8 @@
 static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS("video/x-raw,"
+    GST_STATIC_CAPS(
+    	"video/x-raw,"
 		"width = (int) [ 480, 4096 ],"
 		"height = (int) [ 320, 2160 ]"
 	));
@@ -86,7 +87,7 @@ enum
   PROP_HEIGHT,
   PROP_INTERLACED,
   PROP_MEDIA,
-  PROP_LAST,
+  PROP_LAST
 };
 
 #define _do_init \
@@ -510,8 +511,7 @@ gst_omf_yuv_src_start (GstBaseSrc * basesrc)
   	g_return_val_if_fail(OmfYuvSrcSetInterlaced(src->omf_hd, src->interlaced), FALSE);
   }
 
-  src->media = OmfYuvSrcGetMediaInfo(src->omf_hd);
-  g_strdup_printf ("media info:%s", src->media);
+  OmfYuvSrcGetMediaInfo(src->omf_hd, &src->media);	
    
   return OmfYuvSrcStatusUp(src->omf_hd, OMF_STATE_PLAYING);
 }

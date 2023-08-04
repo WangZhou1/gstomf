@@ -70,7 +70,7 @@ typedef struct _GstOmfJpegSrc {
 
   gboolean		lowbw;
   
-  gchar*	  	media;
+  const gchar*	media;
 
   gpointer 		omf_hd;
 } GstOmfJpegSrc;

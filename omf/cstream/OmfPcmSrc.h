@@ -13,5 +13,5 @@ EXTERNC BOOL OmfPcmSrcSetANS(void* hd, int);
 EXTERNC BOOL OmfPcmSrcSetPreRecord(void* hd, unsigned group);
 EXTERNC BOOL OmfPcmSrcSetPreRecordPipe(void* hd, const char* pipename);
 EXTERNC BOOL OmfPcmSrcSetCache(void* hd, unsigned cache);
-EXTERNC const char* OmfPcmSrcGetMediaInfo(void* hd);
+EXTERNC BOOL OmfPcmSrcGetMediaInfo(void* hd, const char** pmedia);
 

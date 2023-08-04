@@ -19,5 +19,5 @@ EXTERNC BOOL  OmfH265SrcSetPreRecordPipe(void* hd, const char* pipename);
 EXTERNC BOOL  OmfH265SrcSetSharedEncoder(void* hd, int group);
 EXTERNC BOOL  OmfH265SrcSetCache(void* hd, unsigned cache);
 EXTERNC BOOL  OmfH265SrcSetLowBandWidth(void* hd, BOOL en);
-EXTERNC const char* OmfH265SrcGetMediaInfo(void* hd);
+EXTERNC BOOL  OmfH265SrcGetMediaInfo(void* hd, const char** pmedia);
 

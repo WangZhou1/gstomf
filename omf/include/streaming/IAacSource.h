@@ -70,7 +70,7 @@ namespace omf {
 				 * @return aac media info.
 				 * @see AacMediaInfo
 				 */
-				virtual common::AacMediaInfo GetAacMediaInfo() const =0;
+				virtual const AacMediaInfo& GetAacMediaInfo() =0;
 			public:
 				/**
 				 * @brief create a new IAacSource instance.

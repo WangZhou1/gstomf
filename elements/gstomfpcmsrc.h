@@ -95,7 +95,7 @@ typedef struct _GstOmfPcmSrc {
 
   guint			cache;
   
-  gchar*	 	media;
+  const gchar*	media;
 
   gpointer 		omf_hd;
 } GstOmfPcmSrc;

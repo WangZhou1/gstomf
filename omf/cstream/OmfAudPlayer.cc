@@ -104,4 +104,18 @@ EXTERNC BOOL OmfAudPlayerSetLiveDelayLimit(void* hd, const char* limit){
 	return player->EnableCodecOnLinux(limit);
 }
 
+EXTERNC BOOL OmfAudPlayerGetMediaInfo(void* hd, const char** pmedia){
+	returnIfC1(FALSE, !hd);
+
+	auto src = OBJECT_CONVERT(hd, IAudioPlayer);
+		
+	if(src->CurrentState() == State::null){
+		returnIfC1(FALSE, !src->ChangeUp(State::ready));
+	}
+
+	auto &info = src->GetAudioMediaInfo();
+	*pmedia = info.media.c_str();
+	
+	return TRUE;
+}
 

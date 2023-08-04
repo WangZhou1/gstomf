@@ -39,7 +39,7 @@ namespace omf {
 				 * @return pcm media info.
 				 * @see PcmMediaInfo
 				 */
-				virtual PcmMediaInfo GetPcmMediaInfo() const =0;
+				virtual const PcmMediaInfo& GetPcmMediaInfo() =0;
 			public:
 				/**
 				 * @brief create a new IPcmSource instance.

@@ -56,7 +56,7 @@ namespace omf {
 				 * @return H264 media info.
 				 * @see H264MediaInfo
 				 */
-				virtual TsMediaInfo GetTsMediaInfo() const =0;
+				virtual const TsMediaInfo& GetTsMediaInfo() =0;
 			public:
 				/**
 				 * create a new H264Souce instance.

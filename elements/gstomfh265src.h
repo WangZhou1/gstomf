@@ -90,7 +90,7 @@ typedef struct _GstOmfH265Src {
 
   gboolean		lowbw;
 
-  gchar*		media;
+  const gchar*	media;
 
   gpointer 		omf_hd;
 } GstOmfH265Src;

@@ -14,4 +14,4 @@ cp ./omf/cstream/*.so ~/project/v57/gds/ES2/bsp4_glibc/target/linux/icatchtek/v5
 #cp test ~/project/v57/gds/ES2/bsp4_glibc/target/linux/icatchtek/v57/devices/icatch/rootfs/usr/lib/
 #cd -
 
-
+cd ./test/streaming/ && make && cd -

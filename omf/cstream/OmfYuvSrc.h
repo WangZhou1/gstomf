@@ -10,4 +10,4 @@ EXTERNC BOOL  OmfYuvSrcSelectSensor(void* hd, int id);
 EXTERNC BOOL  OmfYuvSrcSetWidth(void* hd, int width);
 EXTERNC BOOL  OmfYuvSrcSetHeight(void* hd, int height); 
 EXTERNC BOOL  OmfYuvSrcSetInterlaced(void* hd, BOOL interlace);
-EXTERNC const char* OmfYuvSrcGetMediaInfo(void* hd);
+EXTERNC BOOL  OmfYuvSrcGetMediaInfo(void* hd, const char **pmedia);

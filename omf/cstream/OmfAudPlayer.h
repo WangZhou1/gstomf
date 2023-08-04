@@ -11,4 +11,5 @@ EXTERNC BOOL OmfAudPlayerSetChannel(void* hd, unsigned int channel);
 EXTERNC BOOL OmfAudPlayerSetMediaInfo(void* hd, const char* media);
 EXTERNC BOOL OmfAudPlayerSetCodecOnLinux(void* hd, BOOL en);
 EXTERNC BOOL OmfAudPlayerSetLiveDelayLimit(void* hd, const char* limit);
+EXTERNC BOOL OmfAudPlayerGetMediaInfo(void* hd, const char** pmedia);
 

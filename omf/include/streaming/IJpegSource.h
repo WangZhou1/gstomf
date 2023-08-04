@@ -58,7 +58,7 @@ namespace omf {
 				 * @return Jpeg media info.
 				 * @see JpegMediaInfo
 				 */
-				virtual common::JpegMediaInfo GetJpegMediaInfo() const =0;
+				virtual const JpegMediaInfo& GetJpegMediaInfo() =0;
 			public:
 				/**
 				 * create a new JpegSouce instance.

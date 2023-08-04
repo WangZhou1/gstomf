@@ -134,15 +134,18 @@ EXTERNC BOOL OmfPcmSrcSetCache(void* hd, unsigned cache){
 	return src->SetCache(cache);
 }
 
-EXTERNC const char* OmfPcmSrcGetMediaInfo(void* hd){
+EXTERNC BOOL OmfPcmSrcGetMediaInfo(void* hd, const char** pmedia){
 	returnIfC1(FALSE, !hd);
 
 	auto src = OBJECT_CONVERT(hd, IPcmSource);
 		
 	if(src->CurrentState() == State::null){
-		returnIfC1(NULL, !src->ChangeUp(State::ready));
+		returnIfC1(FALSE, !src->ChangeUp(State::ready));
 	}
 
-	return src->GetPcmMediaInfo().media.c_str();
+	auto &info = src->GetPcmMediaInfo();
+	*pmedia = info.media.c_str();
+
+	return TRUE;
 }
 

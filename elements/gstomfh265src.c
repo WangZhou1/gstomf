@@ -47,7 +47,8 @@
 static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS("video/x-h265,"
+    GST_STATIC_CAPS(
+    	"video/x-h265,"
 		"width = (int) [ 480, 4096 ],"
 		"height = (int) [ 320, 2160 ],"
 		"framerate = (int) [ 1, 60 ]"
@@ -105,7 +106,7 @@ enum
   PROP_CACHE,  
   PROP_LOW_BW,
   PROP_MEDIA,
-  PROP_LAST,
+  PROP_LAST
 };
 
 #define GST_OMF_H265_GOP_TYPE (gst_omf_h265_src_get_gop_type())
@@ -671,8 +672,7 @@ gst_omf_h265_src_start (GstBaseSrc * basesrc)
 	g_return_val_if_fail(OmfH265SrcSetLowBandWidth(src->omf_hd, src->lowbw), FALSE);
   }
 
-  src->omf_hd = OmfH265SrcGetMediaInfo(src->omf_hd);
-  g_strdup_printf ("media info:%s", src->media);
+  OmfH265SrcGetMediaInfo(src->omf_hd, &src->media);
    
   return OmfH265SrcStatusUp(src->omf_hd, OMF_STATE_PLAYING);
 }

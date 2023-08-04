@@ -47,7 +47,8 @@
 static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS("image/jpeg,"
+    GST_STATIC_CAPS(
+    	"image/jpeg,"
 		"width = (int) [ 480, 4096 ],"
 		"height = (int) [ 320, 2160 ]"
 	));
@@ -90,7 +91,7 @@ enum
   PROP_PREREC_IDX,
   PROP_LOW_BW,
   PROP_MEDIA,
-  PROP_LAST,
+  PROP_LAST
 };
 
 #define _do_init \
@@ -534,8 +535,7 @@ gst_omf_jpeg_src_start (GstBaseSrc * basesrc)
   //	g_return_val_if_fail(OmfJpegSrcSetLowBandWidth(src->omf_hd, src->lowbw), FALSE);
   //}
 
-  src->media = OmfJpegSrcGetMediaInfo(src->omf_hd);
-  g_strdup_printf ("media info:%s", src->media);
+  OmfJpegSrcGetMediaInfo(src->omf_hd, &src->media);
    
   return OmfJpegSrcStatusUp(src->omf_hd, OMF_STATE_PLAYING);
 }

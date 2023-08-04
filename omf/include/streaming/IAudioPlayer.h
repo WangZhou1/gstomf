@@ -76,7 +76,7 @@ namespace omf{
 				 * @return pcm media info.
 				 * @see PcmMediaInfo
 				 */
-				virtual AudioMediaInfo GetAudioMediaInfo() const =0;
+				virtual const AudioMediaInfo& GetAudioMediaInfo() =0;
 				/**
 				 * enable  codec on linux.
 				 * @return true.

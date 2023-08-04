@@ -93,15 +93,18 @@ EXTERNC BOOL OmfYuvSrcSetInterlaced(void* hd, BOOL interlace){
 	return TRUE;
 }
 
-EXTERNC const char* OmfYuvSrcGetMediaInfo(void* hd){
+EXTERNC BOOL OmfYuvSrcGetMediaInfo(void* hd, const char** pmedia){
 	returnIfC1(FALSE, !hd);
 
 	auto src = OBJECT_CONVERT(hd, IYuvSource);
 		
 	if(src->CurrentState() == State::null){
-		returnIfC1(NULL, !src->ChangeUp(State::ready));
+		returnIfC1(FALSE, !src->ChangeUp(State::ready));
 	}
 
-	return src->GetYuvMediaInfo().media.c_str();
+	auto &info = src->GetYuvMediaInfo();
+	*pmedia = info.media.c_str();
+	
+	return TRUE;
 }
 

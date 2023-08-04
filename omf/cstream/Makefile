@@ -10,8 +10,8 @@ CFLAGS :=
 CFLAGS += -shared -fPIC
 CFLAGS += -Os -pipe -mcpu=cortex-a7 
 #CFLAGS += -mfpu=neon-vfpv4 -fno-caller-saves -fno-plt
-#CFLAGS += -std=c++11 -fpermissive -fexceptions -Woverloaded-virtual -Wreturn-type -pthread
-#CFLAGS += -znow -zrelro -Wl,--no-as-needed,--copy-dt-needed-entries
+CFLAGS += -std=c++11 -Wreturn-type
+CFLAGS += -znow -zrelro -Wl,--no-as-needed,--copy-dt-needed-entries
 #CFLAGS += -mfloat-abi=hard  -Wformat -Werror=format-security -D_FORTIFY_SOURCE=1 -Wl,-z,now -Wl,-z,relro
 
 CFLAGS += -I. 

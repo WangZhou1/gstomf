@@ -177,16 +177,19 @@ EXTERNC BOOL OmfH265SrcSetLowBandWidth(void* hd, BOOL en){
 	return FALSE;
 }
 
-EXTERNC const char* OmfH265SrcGetMediaInfo(void* hd){
+EXTERNC BOOL OmfH265SrcGetMediaInfo(void* hd, const char **pmedia){
 	returnIfC1(FALSE, !hd);
 
 	auto src = OBJECT_CONVERT(hd, IH265Source);
 		
 	if(src->CurrentState() == State::null){
-		returnIfC1(NULL, !src->ChangeUp(State::ready));
+		returnIfC1(FALSE, !src->ChangeUp(State::ready));
 	}
 
-	return src->GetH265MediaInfo().media.c_str();
+	auto &info = src->GetH265MediaInfo();
+	*pmedia = info.media.c_str();
+
+	return TRUE;
 }
 
 

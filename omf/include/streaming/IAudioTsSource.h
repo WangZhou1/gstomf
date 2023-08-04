@@ -91,7 +91,7 @@ namespace omf {
 				 * @return pcm media info.
 				 * @see PcmMediaInfo
 				 */
-				virtual TsMediaInfo GetAudioTsMediaInfo() const =0;
+				virtual const TsMediaInfo& GetAudioTsMediaInfo()=0;
 			public:
 				/**
 				 * @brief create a new IPcmSource instance.

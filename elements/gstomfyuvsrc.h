@@ -67,7 +67,7 @@ typedef struct _GstOmfYuvSrc {
 
   gboolean		interlaced;
 
-  gchar*		media;
+  const gchar*	media;
 
   gpointer 		omf_hd;
 } GstOmfYuvSrc;

@@ -50,7 +50,7 @@ namespace omf {
 				 * @return YUV media info.
 				 * @see YuvMediaInfo
 				 */
-				virtual YuvMediaInfo GetYuvMediaInfo() const =0;
+				virtual const YuvMediaInfo& GetYuvMediaInfo() =0;
 			public:
 				/**
 				 * create a new YuvSource instance. \n

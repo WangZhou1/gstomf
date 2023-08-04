@@ -46,10 +46,12 @@
 static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS("audio/x-raw,"
-		"format = (string) S16LE,"
-		"channels = (int) [ 1, 2 ],"
-		"rate = (int) [ 1, 48000 ]"
+    GST_STATIC_CAPS(
+    	"audio/x-raw-int,"
+		"width = (int) 16,"
+		"depth = (int) 16,"
+		"channels = (int) { 1, 2 },"
+		"rate = (int) [ 8000, 48000 ]"
 	));
 
 GST_DEBUG_CATEGORY_STATIC (gst_omf_pcm_src_debug);
@@ -92,7 +94,7 @@ enum
   PROP_PREREC_PIPE,
   PROP_CACHE,  
   PROP_MEDIA,
-  PROP_LAST,
+  PROP_LAST
 };
 
 #define GST_OMF_PCM_AEC_LEVEL (gst_omf_pcm_src_get_aec_level())
@@ -602,8 +604,7 @@ gst_omf_pcm_src_start (GstBaseSrc * basesrc)
 	OmfPcmSrcSetCache(src->omf_hd, src->cache);
   }
 	
-  src->media = OmfPcmSrcGetMediaInfo(src->omf_hd);
-  g_strdup_printf ("media info:%s", src->media);
+  OmfPcmSrcGetMediaInfo(src->omf_hd, &src->media);
    
   return OmfPcmSrcStatusUp(src->omf_hd, OMF_STATE_PLAYING);
 }

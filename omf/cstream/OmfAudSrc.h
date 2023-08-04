@@ -17,5 +17,5 @@ EXTERNC BOOL OmfAudSrcSetPreRecord(void* hd, int group);
 EXTERNC BOOL OmfAudSrcSetPreRecordPipe(void* hd, const char* pipename);
 EXTERNC BOOL OmfAudSrcSetSharedEncoder(void* hd, int group);
 EXTERNC BOOL OmfAudSrcSetCache(void* hd, unsigned cache);
-EXTERNC const char* OmfAudSrcGetMediaInfo(void* hd);
+EXTERNC BOOL OmfAudSrcGetMediaInfo(void* hd, const char** pmedia);
 

@@ -19,5 +19,5 @@ EXTERNC BOOL  OmfH264SrcSetPreRecordPipe(void* hd, const char* pipename);
 EXTERNC BOOL  OmfH264SrcSetSharedEncoder(void* hd, int group);
 EXTERNC BOOL  OmfH264SrcSetCache(void* hd, unsigned cache);
 EXTERNC BOOL  OmfH264SrcSetLowBandWidth(void* hd, BOOL en);
-EXTERNC const char* OmfH264SrcGetMediaInfo(void* hd);
+EXTERNC BOOL  OmfH264SrcGetMediaInfo(void* hd, const char** pmedia);
 

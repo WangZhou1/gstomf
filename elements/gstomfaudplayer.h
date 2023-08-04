@@ -63,11 +63,13 @@ struct _GstOmfAudPlayer {
 
   guint			rate;
   guint			channel;
-  gchar*		media;
+  gchar*		codec;
 
   gboolean		codecOnLinux;
 
   gchar*		liveLimit;
+
+  const char*   media;
 
   gpointer 		omf_hd;
 };

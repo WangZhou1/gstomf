@@ -101,7 +101,7 @@ typedef struct _GstOmfAudSrc {
 
   guint			cache;
 
-   gchar*		media;
+  const gchar*	media;
 
   gpointer 		omf_hd;
 } GstOmfAudSrc;

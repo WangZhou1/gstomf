@@ -44,9 +44,10 @@
 static GstStaticPadTemplate sinktemplate = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS("audio/,"
+    GST_STATIC_CAPS(
+    	"audio/,"
 	    "rate = (int) [ 1, 48000 ],"
-		"channels = (int) [ 1, 2 ]"
+		"channels = (int) { 1, 2 }"
 	));
 
 GST_DEBUG_CATEGORY_STATIC (gst_omf_aud_player_debug);
@@ -85,9 +86,11 @@ enum
   PROP_LAST_MESSAGE,
   PROP_RATE,
   PROP_CHANNEL,
-  PROP_MEDIA,
+  PROP_CODEC,
   PROP_CODEC_LINUX,
-  PROP_LIVE_LIMIT
+  PROP_LIVE_LIMIT,
+  PROP_MEDIA,
+  PROP_LAST
 };
 
 #define _do_init \
@@ -193,20 +196,23 @@ gst_omf_aud_player_class_init (GstOmfAudPlayerClass * klass)
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_MEDIA,
 	 g_param_spec_string ("codec", "Codec", "The input audio codec, optional:\n"
-	  											"\t\t\t   (1): aac \n"
-	  											"\t\t\t   (2): alaw \n"
-	  											"\t\t\t   (3): ulaw \n"
-	  											"\t\t\t   (4): g722 \n"
-	  											"\t\t\t   (5): opus", NULL,
+	  											"\t\t\t   (-): aac \n"
+	  											"\t\t\t   (-): alaw \n"
+	  											"\t\t\t   (-): ulaw \n"
+	  											"\t\t\t   (-): g722 \n"
+	  											"\t\t\t   (-): opus", NULL,
 		  G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_CODEC_LINUX,
 	 g_param_spec_boolean ("codec-on-linux", "Codec on Linux",
 		   "decode the audio on Linux", DEFAULT_CODEC_LINUX,
-		   G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+		  G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_LIVE_LIMIT,
 	 g_param_spec_string ("live-limit", "live delay limit", "Limit the play delay when live streaming, optional:\n"
 	  													"\t\t\t   (1): g1={duration=300,speed=1.2},g2={duration=600,speed=1.5}", NULL,
 		  G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_MEDIA,
+	 g_param_spec_string ("media-info", "Media information", "Get media information", NULL,
+	      G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)); 
 
   gst_element_class_set_static_metadata (gstelement_class,
       "Omf Audio Player",
@@ -237,12 +243,13 @@ gst_omf_aud_player_init (GstOmfAudPlayer * sink)
 
   sink->rate = DEFAULT_RATE;
   sink->channel = DEFAULT_CHANNEL;
-  sink->media = DEFAULT_CODEC ? g_strdup(DEFAULT_CODEC) : NULL;
+  sink->codec = DEFAULT_CODEC ? g_strdup(DEFAULT_CODEC) : NULL;
   sink->codecOnLinux = DEFAULT_CODEC_LINUX;
   sink->liveLimit = DEFAULT_LIVE_LIMIT ? g_strdup(DEFAULT_LIVE_LIMIT) : NULL;
+  sink->media = NULL;
 
-  if(sink->media == NULL){
-  	sink->media = g_strdup("pcm");
+  if(sink->codec == NULL){
+  	sink->codec = g_strdup("pcm");
   }
 
   sink->omf_hd = OmfAudPlayerCreate();
@@ -259,8 +266,8 @@ gst_omf_aud_player_finalize (GObject * obj)
 	 OmfAudPlayerDestory(sink->omf_hd);
   }
 
-  g_free(sink->media);
-  sink->media = NULL;
+  g_free(sink->codec);
+  sink->codec = NULL;
   g_free( sink->liveLimit);
   sink->liveLimit = NULL;
 
@@ -295,9 +302,9 @@ gst_omf_aud_player_set_property (GObject * object, guint prop_id,
 	case PROP_CHANNEL:
 		sink->channel = g_value_get_int(value);
 		break;
-	case PROP_MEDIA:
-		g_free (sink->media);
-		sink->media = g_strdup(g_value_get_string(value));
+	case PROP_CODEC:
+		g_free (sink->codec);
+		sink->codec = g_strdup(g_value_get_string(value));
 		break;
 	case PROP_CODEC_LINUX:
       	sink->codecOnLinux = g_value_get_boolean (value);
@@ -345,14 +352,17 @@ gst_omf_aud_player_get_property (GObject * object, guint prop_id, GValue * value
 	case PROP_CHANNEL:
 		g_value_set_int(value, sink->channel);
 		break;
-	case PROP_MEDIA:
-		g_value_set_string(value, sink->media);
+	case PROP_CODEC:
+		g_value_set_string(value, sink->codec);
 		break;
 	case PROP_CODEC_LINUX:
      	g_value_set_boolean (value, sink->codecOnLinux);
 		break;
 	case PROP_LIVE_LIMIT:
 		g_value_set_string(value, sink->liveLimit);
+		break;
+	case PROP_MEDIA:
+		g_value_set_string(value, sink->media);
 		break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -554,6 +564,8 @@ gst_omf_aud_player_start (GstBaseSink * bsink)
   if(sink->liveLimit){
 	OmfAudPlayerSetLiveDelayLimit(sink->omf_hd, sink->liveLimit);
   }
+
+  OmfAudPlayerGetMediaInfo(sink->omf_hd, &sink->media);
    
   return OmfAudSrcStatusUp(sink->omf_hd, OMF_STATE_PLAYING);
 }

@@ -47,9 +47,10 @@
 static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS("audio/,"
-	    "rate = (int) [ 1, 48000 ],"
-		"channels = (int) [ 1, 2 ]"
+    GST_STATIC_CAPS(
+    	"audio/,"
+	    "rate = (int) [ 8000, 48000 ],"
+		"channels = (int) { 1, 2 }"
 	));
 
 GST_DEBUG_CATEGORY_STATIC (gst_omf_aud_src_debug);
@@ -101,7 +102,7 @@ enum
   PROP_SHARE,
   PROP_CACHE,  
   PROP_MEDIA,
-  PROP_LAST,
+  PROP_LAST
 };
 
 #define GST_OMF_AUD_AEC_LEVEL (gst_omf_aud_src_get_aec_level())
@@ -218,11 +219,11 @@ gst_omf_aud_src_class_init (GstOmfAudSrcClass * klass)
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_CODEC,
 	  g_param_spec_string ("codec", "Codec", "Audio codec, null for pcm, optional:\n"
-	  											"\t\t\t   (1): aac:br=128000 \n"
-	  											"\t\t\t   (2): alaw \n"
-	  											"\t\t\t   (3): ulaw \n"
-	  											"\t\t\t   (4): g722 \n"
-	  											"\t\t\t   (5): opus:framesize=100,application=voip,complexity=1", NULL,
+	  											"\t\t\t   (-): aac:br=128000 \n"
+	  											"\t\t\t   (-): alaw \n"
+	  											"\t\t\t   (-): ulaw \n"
+	  											"\t\t\t   (-): g722 \n"
+	  											"\t\t\t   (-): opus:framesize=100,application=voip,complexity=1", NULL,
 		  G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_AEC,
       g_param_spec_enum ("aec-level", "AEC level",
@@ -673,8 +674,7 @@ gst_omf_aud_src_start (GstBaseSrc * basesrc)
 	OmfAudSrcSetCache(src->omf_hd, src->cache);
   }
 
-  src->media = OmfAudSrcGetMediaInfo(src->omf_hd);
-  g_strdup_printf ("media info:%s", src->media);
+  OmfAudSrcGetMediaInfo(src->omf_hd, &src->media);
    
   return OmfAudSrcStatusUp(src->omf_hd, OMF_STATE_PLAYING);
 }

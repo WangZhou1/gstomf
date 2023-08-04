@@ -11,4 +11,4 @@ EXTERNC BOOL  OmfJpegSrcSetWidth(void* hd, int width);
 EXTERNC BOOL  OmfJpegSrcSetHeight(void* hd, int height);
 EXTERNC BOOL  OmfJpegSrcSetQP(void* hd, int qp);
 EXTERNC BOOL  OmfJpegSrcSetPreRecord(void* hd, unsigned group); 
-EXTERNC const char* OmfJpegSrcGetMediaInfo(void* hd);
+EXTERNC BOOL  OmfJpegSrcGetMediaInfo(void* hd, const char** pmedia);
