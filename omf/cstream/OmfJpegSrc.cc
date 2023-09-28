@@ -16,6 +16,11 @@ EXTERNC void* OmfJpegSrcCreate(){
 
 	auto src = IJpegSource::CreateNew("dualos");printf("[OMF]create:%p\n",src);
 
+	///set FrameRateControl Mode
+	OmfFRCMode frc("vfrc");
+	returnIfC1(NULL, !src->IsSupportFRCMode(frc));
+	returnIfC1(NULL, !src->SetFRCMode(frc));
+
 	OmfIOMode io("pull");
 	returnIfC1(0, !src->IsSupportIOMode(io));
 	returnIfC1(0, !src->SetFrameIOMode(io));
@@ -83,6 +88,14 @@ EXTERNC BOOL OmfJpegSrcSetHeight(void* hd, int height){
 	auto src = OBJECT_CONVERT(hd, IJpegSource);
 	return src->SetHeight(height);
 }
+
+EXTERNC BOOL OmfJpegSrcSetFrameRate(void* hd, int fr){
+	returnIfC1(FALSE, !hd);
+
+	auto src = OBJECT_CONVERT(hd, IJpegSource);
+	return src->SetFrameRate(fr);
+}
+
 
 EXTERNC BOOL OmfJpegSrcSetQP(void* hd, int qp){
 	returnIfC1(FALSE, !hd);

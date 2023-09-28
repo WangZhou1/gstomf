@@ -84,8 +84,9 @@ typedef struct _GstOmfPcmSrc {
 
   gchar*		last_message;
 
+  guint 		samples;
   guint			rate;
-  guint			channel;
+  guint			channels;
 
   GstOmfPcmSrcAecLevel		aec;
   GstOmfPcmSrcAnsMode		ans;
@@ -94,6 +95,9 @@ typedef struct _GstOmfPcmSrc {
   gchar*		prerecpipe;
 
   guint			cache;
+
+  long long 	spts_ns;	
+  long long		lpts_ns;
   
   const gchar*	media;
 

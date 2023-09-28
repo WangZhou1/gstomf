@@ -64,15 +64,20 @@ typedef struct _GstOmfJpegSrc {
   guint			senid;
   guint			width;
   guint			height;
+  guint			framerate;
   guint			qp;
 
   guint			prerecidx;
 
   gboolean		lowbw;
+
+  long long 	spts_ns;	
+  long long		lpts_ns;
   
   const gchar*	media;
 
   gpointer 		omf_hd;
+  
 } GstOmfJpegSrc;
 
 typedef struct _GstOmfJpegSrcClass {

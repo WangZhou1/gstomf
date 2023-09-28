@@ -44,13 +44,15 @@
 //#include "gstelements_private.h"
 #include "gstomfyuvsrc.h"
 
-static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
+static GstStaticPadTemplate srctemplate = 
+GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS(
-    	"video/x-raw,"
-		"width = (int) [ 480, 4096 ],"
-		"height = (int) [ 320, 2160 ]"
+    GST_STATIC_CAPS("video/x-raw , " 
+    	"format = (string) { I420 }, "
+		"width = (int) [ 480, 4096 ], " 
+		"height = (int) [ 320, 2160 ], "
+	   	"framerate = (fraction) [ 0/1, 60/1 ] "
 	));
 
 GST_DEBUG_CATEGORY_STATIC (gst_omf_yuv_src_debug);
@@ -67,10 +69,11 @@ enum
 #define DEFAULT_SIGNAL_HANDOFFS FALSE
 #define DEFAULT_SILENT          TRUE
 #define DEFAULT_DUMP            FALSE
-#define DEFAULT_FORMAT          GST_FORMAT_BYTES
+#define DEFAULT_FORMAT          GST_FORMAT_TIME
 #define DEFAULT_SENID			0
-#define DEFAULT_WIDTH			1920
-#define DEFAULT_HEIGHT			1080
+#define DEFAULT_WIDTH			640
+#define DEFAULT_HEIGHT			360
+#define DEFAULT_FRAMERATE		30
 #define DEFAULT_INTERLACED		FALSE
 
 enum
@@ -85,6 +88,7 @@ enum
   PROP_SENID,
   PROP_WIDTH,
   PROP_HEIGHT,
+  PROP_FRAMERATE,
   PROP_INTERLACED,
   PROP_MEDIA,
   PROP_LAST
@@ -100,6 +104,10 @@ static void gst_omf_yuv_src_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void gst_omf_yuv_src_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
+
+static gboolean gst_omf_yuv_src_setcaps (GstBaseSrc * bsrc, GstCaps * caps);
+static GstCaps *gst_omf_yuv_src_src_fixate (GstBaseSrc * bsrc,
+    GstCaps * caps);
 
 static gboolean gst_omf_yuv_src_start (GstBaseSrc * basesrc);
 static gboolean gst_omf_yuv_src_stop (GstBaseSrc * basesrc);
@@ -176,6 +184,8 @@ gst_omf_yuv_src_class_init (GstOmfYuvSrcClass * klass)
       "wang.zhou@icatchtek.com");
   gst_element_class_add_static_pad_template (gstelement_class, &srctemplate);
 
+  gstbase_src_class->set_caps = GST_DEBUG_FUNCPTR (gst_omf_yuv_src_setcaps);
+  gstbase_src_class->fixate = GST_DEBUG_FUNCPTR (gst_omf_yuv_src_src_fixate);
   gstbase_src_class->is_seekable = GST_DEBUG_FUNCPTR (gst_omf_yuv_src_is_seekable);
   gstbase_src_class->start = GST_DEBUG_FUNCPTR (gst_omf_yuv_src_start);
   gstbase_src_class->stop = GST_DEBUG_FUNCPTR (gst_omf_yuv_src_stop);
@@ -193,14 +203,92 @@ gst_omf_yuv_src_init (GstOmfYuvSrc * omfyuvsrc)
   omfyuvsrc->format = DEFAULT_FORMAT;
   omfyuvsrc->last_message = NULL;
 
+   /* we operate in time */
+  gst_base_src_set_format (GST_BASE_SRC (omfyuvsrc), DEFAULT_FORMAT);
+  gst_base_src_set_live (GST_BASE_SRC (omfyuvsrc), FALSE);
+
   omfyuvsrc->senid = DEFAULT_SENID;
   omfyuvsrc->width = DEFAULT_WIDTH;
   omfyuvsrc->height = DEFAULT_HEIGHT;
+  omfyuvsrc->framerate = DEFAULT_FRAMERATE;
   omfyuvsrc->interlaced = DEFAULT_INTERLACED;  
+  omfyuvsrc->spts_ns = -1;
+  omfyuvsrc->lpts_ns = -1;
   omfyuvsrc->media = NULL;
 
   omfyuvsrc->omf_hd = OmfYuvSrcCreate();
 
+}
+
+static GstCaps *
+gst_omf_yuv_src_src_fixate (GstBaseSrc * bsrc, GstCaps * caps)
+{
+  GstOmfYuvSrc *src = GST_OMF_YUV_SRC (bsrc);
+  GstStructure *structure;
+
+  caps = gst_caps_make_writable (caps);
+  structure = gst_caps_get_structure (caps, 0);
+
+  gst_structure_fixate_field_nearest_int (structure, "width", src->width);
+  gst_structure_fixate_field_nearest_int (structure, "height", src->height);
+
+  if (gst_structure_has_field (structure, "framerate"))
+    gst_structure_fixate_field_nearest_fraction (structure, "framerate", src->framerate, 1);
+  else
+    gst_structure_set (structure, "framerate", GST_TYPE_FRACTION, src->framerate, 1, NULL);
+
+  /*if (gst_structure_has_field (structure, "interlace-mode"))
+    gst_structure_fixate_field_string (structure, "interlace-mode",
+        "progressive");
+  else
+    gst_structure_set (structure, "interlace-mode", G_TYPE_STRING,
+        "progressive", NULL);*/
+        
+
+  caps = GST_BASE_SRC_CLASS (parent_class)->fixate (bsrc, caps);
+
+  return caps;
+}
+
+static gboolean
+gst_omf_yuv_src_setcaps (GstBaseSrc * bsrc, GstCaps * caps)
+{
+  const GstStructure *structure;
+  GstOmfYuvSrc *omfyuvsrc;
+  guint i;
+  guint n_lines;
+  gint offset;
+
+  omfyuvsrc = GST_OMF_YUV_SRC (bsrc);
+
+  structure = gst_caps_get_structure (caps, 0);
+
+  GST_OBJECT_LOCK (omfyuvsrc);
+
+  if (gst_structure_has_name (structure, "video/x-raw")) {
+    /* we can use the parsing code */
+    //if (!gst_video_info_from_caps (&info, caps))
+    //  goto parse_failed;
+
+  } 
+
+  GST_OBJECT_UNLOCK (omfyuvsrc);
+
+  return TRUE;
+
+  /* ERRORS */
+parse_failed:
+  {
+    GST_OBJECT_UNLOCK (omfyuvsrc);
+    GST_DEBUG_OBJECT (bsrc, "failed to parse caps");
+    return FALSE;
+  }
+unsupported_caps:
+  {
+    GST_OBJECT_UNLOCK (omfyuvsrc);
+    GST_DEBUG_OBJECT (bsrc, "unsupported caps: %" GST_PTR_FORMAT, caps);
+    return FALSE;
+  }
 }
 
 static void
@@ -283,6 +371,9 @@ gst_omf_yuv_src_set_property (GObject * object, guint prop_id,
 	case PROP_HEIGHT:
 		src->height = g_value_get_int(value);
 		break;
+	case PROP_FRAMERATE:
+		src->framerate = g_value_get_int(value);
+		break;
 	case PROP_INTERLACED:
 		src->interlaced = g_value_get_boolean(value);
 		break;
@@ -327,6 +418,9 @@ gst_omf_yuv_src_get_property (GObject * object, guint prop_id, GValue * value,
 		break;
 	case PROP_HEIGHT:
 		g_value_set_int(value, src->height);
+		break;
+	case PROP_FRAMERATE:
+		g_value_set_int(value, src->framerate);
 		break;
 	case PROP_INTERLACED:
 		g_value_set_boolean(value, src->interlaced);
@@ -416,18 +510,33 @@ gst_omf_yuv_src_create (GstBaseSrc * basesrc, guint64 offset, guint length,
 	 
 	  buf =  gst_omf_yuv_src_alloc_buffer (src, size, frame.data, frame.free);
 	  if(buf){
+	  	if(src->spts_ns == -1){
+			src->spts_ns = frame.pts_ns;
+		}
+	 	if(src->lpts_ns == -1){
+			long long f_dur = 1000000000 / src->framerate; //ns
+			src->lpts_ns = frame.pts_ns - f_dur; //ns
+		}
 		///
-		GST_BUFFER_PTS(buf) = frame.pts_ms;
-		GST_BUFFER_DTS(buf) = frame.pts_ms;
-		GST_BUFFER_OFFSET(buf) = frame.index;	
+		GST_BUFFER_PTS(buf) = frame.pts_ns - src->spts_ns;
+		GST_BUFFER_DTS(buf) = GST_CLOCK_TIME_NONE;
+		
+		GST_BUFFER_OFFSET(buf) = frame.index;
+		GST_BUFFER_OFFSET_END(buf) = frame.index + 1;
+
+		long long lpts = src->lpts_ns;
+		src->lpts_ns = frame.pts_ns;
+		GST_BUFFER_DURATION (buf) = frame.pts_ns - lpts;
+
 		GST_MINI_OBJECT_CAST (buf)->flags = frame.iskeyframe;
+
+		gst_object_sync_values (GST_OBJECT (src), GST_BUFFER_PTS (buf));
 	  }
 	}	
   }
 
   if (!src->silent) {
     gchar dts_str[64], pts_str[64], dur_str[64];
-    gchar *flag_str;
 
     GST_OBJECT_LOCK (src);
     g_free (src->last_message);
@@ -451,16 +560,15 @@ gst_omf_yuv_src_create (GstBaseSrc * basesrc, guint64 offset, guint length,
       g_strlcpy (dur_str, "none", sizeof (dur_str));
     }
 
-    flag_str = gst_buffer_get_flags_string (buf);
     src->last_message =
         g_strdup_printf ("create   ******* (%s:%s) (%u bytes, dts: %s, pts:%s"
         ", duration: %s, offset: %" G_GINT64_FORMAT ", offset_end: %"
-        G_GINT64_FORMAT ", flags: %08x %s) %p",
+        G_GINT64_FORMAT ", flags: %08x ) %p",
         GST_DEBUG_PAD_NAME (GST_BASE_SRC_CAST (src)->srcpad), (guint) size,
         dts_str, pts_str, dur_str, GST_BUFFER_OFFSET (buf),
         GST_BUFFER_OFFSET_END (buf), GST_MINI_OBJECT_CAST (buf)->flags,
-        flag_str, buf);
-    g_free (flag_str);
+         buf);
+
     GST_OBJECT_UNLOCK (src);
 
     g_object_notify_by_pspec ((GObject *) src, pspec_last_message);
@@ -507,6 +615,9 @@ gst_omf_yuv_src_start (GstBaseSrc * basesrc)
   if(src->height){
   	g_return_val_if_fail(OmfYuvSrcSetHeight(src->omf_hd, src->height), FALSE);
   }	
+  if(src->framerate){
+	g_return_val_if_fail(OmfYuvSrcSetFrameRate(src->omf_hd, src->framerate), FALSE);
+  }
   if(src->interlaced){
   	g_return_val_if_fail(OmfYuvSrcSetInterlaced(src->omf_hd, src->interlaced), FALSE);
   }

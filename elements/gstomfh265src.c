@@ -44,14 +44,17 @@
 //#include "gstelements_private.h"
 #include "gstomfh265src.h"
 
-static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
+static GstStaticPadTemplate srctemplate = 
+GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS(
-    	"video/x-h265,"
-		"width = (int) [ 480, 4096 ],"
-		"height = (int) [ 320, 2160 ],"
-		"framerate = (int) [ 1, 60 ]"
+    GST_STATIC_CAPS("video/x-h265, "
+		"width = (int) [ 480, 4096 ], "
+		"height = (int) [ 320, 2160 ], "
+		"framerate = (fraction) [ 9/1, 60/1 ], "
+		"stream-format = (string) byte-stream, "
+        "alignment = (string) au, " 
+        "profile = (string) { main }"
 	));
 
 GST_DEBUG_CATEGORY_STATIC (gst_omf_h265_src_debug);
@@ -68,7 +71,7 @@ enum
 #define DEFAULT_SIGNAL_HANDOFFS FALSE
 #define DEFAULT_SILENT          TRUE
 #define DEFAULT_DUMP            FALSE
-#define DEFAULT_FORMAT          GST_FORMAT_BYTES
+#define DEFAULT_FORMAT          GST_FORMAT_TIME
 #define DEFAULT_SENID			0
 #define DEFAULT_WIDTH			1920
 #define DEFAULT_HEIGHT			1080
@@ -138,6 +141,10 @@ static void gst_omf_h265_src_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void gst_omf_h265_src_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
+
+static gboolean gst_omf_h265_src_setcaps (GstBaseSrc * bsrc, GstCaps * caps);
+static GstCaps *gst_omf_h265_src_src_fixate (GstBaseSrc * bsrc,
+    GstCaps * caps);
 
 static gboolean gst_omf_h265_src_start (GstBaseSrc * basesrc);
 static gboolean gst_omf_h265_src_stop (GstBaseSrc * basesrc);
@@ -248,6 +255,8 @@ gst_omf_h265_src_class_init (GstOmfH265SrcClass * klass)
       "wang.zhou@icatchtek.com");
   gst_element_class_add_static_pad_template (gstelement_class, &srctemplate);
 
+  gstbase_src_class->set_caps = GST_DEBUG_FUNCPTR (gst_omf_h265_src_setcaps);
+  gstbase_src_class->fixate = GST_DEBUG_FUNCPTR (gst_omf_h265_src_src_fixate);
   gstbase_src_class->is_seekable = GST_DEBUG_FUNCPTR (gst_omf_h265_src_is_seekable);
   gstbase_src_class->start = GST_DEBUG_FUNCPTR (gst_omf_h265_src_start);
   gstbase_src_class->stop = GST_DEBUG_FUNCPTR (gst_omf_h265_src_stop);
@@ -281,6 +290,68 @@ gst_omf_h265_src_init (GstOmfH265Src * omfh265src)
   omfh265src->omf_hd = OmfH265SrcCreate();
 
 }
+
+static GstCaps *
+gst_omf_h265_src_src_fixate (GstBaseSrc * bsrc, GstCaps * caps)
+{
+  GstOmfH265Src *src = GST_OMF_H265_SRC (bsrc);
+  GstStructure *structure;
+
+  caps = gst_caps_make_writable (caps);
+  structure = gst_caps_get_structure (caps, 0);
+
+  gst_structure_set (structure, "stream-format", G_TYPE_STRING, "byte-stream",
+      NULL);
+  gst_structure_set (structure, "alignment", G_TYPE_STRING, "au", NULL);
+
+  gst_structure_fixate_field_nearest_int (structure, "width", src->width);
+  gst_structure_fixate_field_nearest_int (structure, "height", src->height);
+
+  if (gst_structure_has_field (structure, "framerate"))
+    gst_structure_fixate_field_nearest_fraction (structure, "framerate", src->framerate, 1);
+  else
+    gst_structure_set (structure, "framerate", GST_TYPE_FRACTION, src->framerate, 1, NULL);
+        
+  caps = GST_BASE_SRC_CLASS (parent_class)->fixate (bsrc, caps);
+
+  return caps;
+}
+
+static gboolean
+gst_omf_h265_src_setcaps (GstBaseSrc * bsrc, GstCaps * caps)
+{
+  const GstStructure *structure;
+  GstOmfH265Src *omfh265src;
+  guint i;
+  guint n_lines;
+  gint offset;
+
+  omfh265src = GST_OMF_H265_SRC (bsrc);
+
+  structure = gst_caps_get_structure (caps, 0);
+
+  GST_OBJECT_LOCK (omfh265src);
+
+
+  GST_OBJECT_UNLOCK (omfh265src);
+
+  return TRUE;
+
+  /* ERRORS */
+parse_failed:
+  {
+    GST_OBJECT_UNLOCK (omfh265src);
+    GST_DEBUG_OBJECT (bsrc, "failed to parse caps");
+    return FALSE;
+  }
+unsupported_caps:
+  {
+    GST_OBJECT_UNLOCK (omfh265src);
+    GST_DEBUG_OBJECT (bsrc, "unsupported caps: %" GST_PTR_FORMAT, caps);
+    return FALSE;
+  }
+}
+
 
 static void
 gst_omf_h265_src_finalize (GObject * object)
@@ -556,18 +627,33 @@ gst_omf_h265_src_create (GstBaseSrc * basesrc, guint64 offset, guint length,
 	 
 	  buf =  gst_omf_h265_src_alloc_buffer (src, size, frame.data, frame.free);
 	  if(buf){
+	  	if(src->spts_ns == -1){
+			src->spts_ns = frame.pts_ns;
+		}
+	 	if(src->lpts_ns == -1){
+			long long f_dur = 1000000000 / src->framerate; //ns
+			src->lpts_ns = frame.pts_ns - f_dur; //ns
+		}
 		///
-		GST_BUFFER_PTS(buf) = frame.pts_ms;
-		GST_BUFFER_DTS(buf) = frame.pts_ms;
+		GST_BUFFER_PTS(buf) = frame.pts_ns - src->spts_ns;
+		GST_BUFFER_DTS(buf) = GST_CLOCK_TIME_NONE;
+		
 		GST_BUFFER_OFFSET(buf) = frame.index;
+		GST_BUFFER_OFFSET_END(buf) = frame.index + 1;
+
+		long long lpts = src->lpts_ns;
+		src->lpts_ns = frame.pts_ns;
+		GST_BUFFER_DURATION (buf) = frame.pts_ns - lpts;
+		
 		GST_MINI_OBJECT_CAST (buf)->flags = frame.iskeyframe;
+
+		gst_object_sync_values (GST_OBJECT (src), GST_BUFFER_PTS (buf));
 	  }
 	}	
   }
 
   if (!src->silent) {
     gchar dts_str[64], pts_str[64], dur_str[64];
-    gchar *flag_str;
 
     GST_OBJECT_LOCK (src);
     g_free (src->last_message);
@@ -591,16 +677,15 @@ gst_omf_h265_src_create (GstBaseSrc * basesrc, guint64 offset, guint length,
       g_strlcpy (dur_str, "none", sizeof (dur_str));
     }
 
-    flag_str = gst_buffer_get_flags_string (buf);
     src->last_message =
         g_strdup_printf ("create   ******* (%s:%s) (%u bytes, dts: %s, pts:%s"
         ", duration: %s, offset: %" G_GINT64_FORMAT ", offset_end: %"
-        G_GINT64_FORMAT ", flags: %08x %s) %p",
+        G_GINT64_FORMAT ", flags: %08x ) %p",
         GST_DEBUG_PAD_NAME (GST_BASE_SRC_CAST (src)->srcpad), (guint) size,
         dts_str, pts_str, dur_str, GST_BUFFER_OFFSET (buf),
         GST_BUFFER_OFFSET_END (buf), GST_MINI_OBJECT_CAST (buf)->flags,
-        flag_str, buf);
-    g_free (flag_str);
+         buf);
+
     GST_OBJECT_UNLOCK (src);
 
     g_object_notify_by_pspec ((GObject *) src, pspec_last_message);

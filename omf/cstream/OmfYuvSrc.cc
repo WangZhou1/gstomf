@@ -16,6 +16,11 @@ EXTERNC void* OmfYuvSrcCreate(){
 
 	auto src = IYuvSource::CreateNew("dualos");printf("[OMF]create:%p\n",src);
 
+	///set FrameRateControl Mode
+	OmfFRCMode frc("vfrc");
+	returnIfC1(NULL, !src->IsSupportFRCMode(frc));
+	returnIfC1(NULL, !src->SetFRCMode(frc));
+
 	OmfIOMode io("pull");
 	returnIfC1(0, !src->IsSupportIOMode(io));
 	returnIfC1(0, !src->SetFrameIOMode(io));
@@ -82,6 +87,13 @@ EXTERNC BOOL OmfYuvSrcSetHeight(void* hd, int height){
 
 	auto src = OBJECT_CONVERT(hd, IYuvSource);
 	return src->SetHeight(height);
+}
+
+EXTERNC BOOL OmfYuvSrcSetFrameRate(void* hd, int fr){
+	returnIfC1(FALSE, !hd);
+
+	auto src = OBJECT_CONVERT(hd, IYuvSource);
+	return src->SetFrameRate(fr);
 }
 
 EXTERNC BOOL OmfYuvSrcSetInterlaced(void* hd, BOOL interlace){

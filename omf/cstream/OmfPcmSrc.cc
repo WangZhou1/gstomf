@@ -63,6 +63,15 @@ EXTERNC BOOL OmfPcmSrcGetFrame(void* hd, OmfFrameC_t* frame){
 	return FALSE;
 }
 
+EXTERNC BOOL OmfPcmSrcSetMicSamples(void* hd, unsigned int samples){
+	returnIfC1(FALSE, !hd);
+	returnIfC1(FALSE, !samples);
+
+	auto src = OBJECT_CONVERT(hd, IPcmSource);
+	return src->SetMicSamples(samples);
+}
+
+
 EXTERNC BOOL OmfPcmSrcSetSampleRate(void* hd, unsigned int samplerate){
 	returnIfC1(FALSE, !hd);
 	returnIfC1(FALSE, samplerate <= 0);

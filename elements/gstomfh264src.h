@@ -90,6 +90,9 @@ typedef struct _GstOmfH264Src {
 
   gboolean		lowbw;
 
+  long long 	spts_ns;	
+  long long		lpts_ns;
+
   const gchar*	media;
 
   gpointer 		omf_hd;

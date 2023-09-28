@@ -2,7 +2,7 @@
  * Copyright (C) 1999,2000 Erik Walthinsen <omega@cse.ogi.edu>
  *                    2005 Wim Taymans <wim@fluendo.com>
  *
- * gstomfaudplayer.c:
+ * gstomfpcmplayer.c:
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -20,15 +20,15 @@
  * Boston, MA 02110-1301, USA.
  */
 /**
- * SECTION:element-omfaudplayer
- * @title: omfaudplayer
- * @see_also: #GstOmfAudPlayer
+ * SECTION:element-omfpcmplayer
+ * @title: omfpcmplayer
+ * @see_also: #GstOmfPcmPlayer
  *
  * Playing audio data.
  *
  * ## Example launch line
  * |[
- * gst-launch-1.0 audiotestsrc ! omfaudplayer media=pcm
+ * gst-launch-1.0 audiotestsrc ! omfpcmplayer media=pcm
  * ]| Get data from test src to play.
  *
  */
@@ -38,22 +38,38 @@
 #endif
 
 //#include "gstelements_private.h"
-#include "gstomfaudplayer.h"
+#include "gstomfpcmplayer.h"
 #include <string.h>
 
-static GstStaticPadTemplate sinktemplate = GST_STATIC_PAD_TEMPLATE ("sink",
+#define SAMPLE_RATES " 8000, " \
+                    "11025, " \
+                    "12000, " \
+                    "16000, " \
+                    "22050, " \
+                    "24000, " \
+                    "32000, " \
+                    "44100, " \
+                    "48000, " \
+                    "64000, " \
+                    "88200, " \
+                    "96000"
+
+
+static GstStaticPadTemplate sinktemplate =
+GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS(
-    	"audio/,"
-	    "rate = (int) [ 1, 48000 ],"
-		"channels = (int) { 1, 2 }"
+    GST_STATIC_CAPS("audio/x-raw, "
+    	"format = (string) S16LE , "
+    	"layout = (string) interleaved, "
+		"rate = (int) { " SAMPLE_RATES " } , "
+		"channels = (int) [ 1, 2 ]"
 	));
 
-GST_DEBUG_CATEGORY_STATIC (gst_omf_aud_player_debug);
-#define GST_CAT_DEFAULT gst_omf_aud_player_debug
+GST_DEBUG_CATEGORY_STATIC (gst_omf_pcm_player_debug);
+#define GST_CAT_DEFAULT gst_omf_pcm_player_debug
 
-/* OmfAudPlayer signals and args */
+/* OmfPcmPlayer signals and args */
 enum
 {
   /* FILL ME */
@@ -71,8 +87,6 @@ enum
 #define DEFAULT_LAST_MESSAGE 		NULL
 #define DEFAULT_RATE				16000
 #define DEFAULT_CHANNEL				1
-#define DEFAULT_CODEC				NULL
-#define DEFAULT_CODEC_LINUX			TRUE
 #define DEFAULT_LIVE_LIMIT			NULL
 
 enum
@@ -86,38 +100,36 @@ enum
   PROP_LAST_MESSAGE,
   PROP_RATE,
   PROP_CHANNEL,
-  PROP_CODEC,
-  PROP_CODEC_LINUX,
   PROP_LIVE_LIMIT,
   PROP_MEDIA,
   PROP_LAST
 };
 
 #define _do_init \
-    GST_DEBUG_CATEGORY_INIT (gst_omf_aud_player_debug, "omfaudplayer", 0, "omf audio player element");
-#define gst_omf_aud_player_parent_class parent_class
-G_DEFINE_TYPE_WITH_CODE (GstOmfAudPlayer, gst_omf_aud_player, GST_TYPE_BASE_SINK,
+    GST_DEBUG_CATEGORY_INIT (gst_omf_pcm_player_debug, "omfpcmplayer", 0, "omf pcm player element");
+#define gst_omf_pcm_player_parent_class parent_class
+G_DEFINE_TYPE_WITH_CODE (GstOmfPcmPlayer, gst_omf_pcm_player, GST_TYPE_BASE_SINK,
     _do_init);
 
-static void gst_omf_aud_player_set_property (GObject * object, guint prop_id,
+static void gst_omf_pcm_player_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
-static void gst_omf_aud_player_get_property (GObject * object, guint prop_id,
+static void gst_omf_pcm_player_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
-static void gst_omf_aud_player_finalize (GObject * obj);
-static gboolean gst_omf_aud_player_start (GstBaseSink * bsink);
-static gboolean gst_omf_aud_player_stop (GstBaseSink * bsink);
+static void gst_omf_pcm_player_finalize (GObject * obj);
+static gboolean gst_omf_pcm_player_start (GstBaseSink * bsink);
+static gboolean gst_omf_pcm_player_stop (GstBaseSink * bsink);
 
-static GstFlowReturn gst_omf_aud_player_preroll (GstBaseSink * bsink,
+static GstFlowReturn gst_omf_pcm_player_preroll (GstBaseSink * bsink,
     GstBuffer * buffer);
-static GstFlowReturn gst_omf_aud_player_render (GstBaseSink * bsink,
+static GstFlowReturn gst_omf_pcm_player_render (GstBaseSink * bsink,
     GstBuffer * buffer);
-static gboolean gst_omf_aud_player_event (GstBaseSink * bsink, GstEvent * event);
-static guint gst_omf_aud_player_signals[LAST_SIGNAL] = { 0 };
+static gboolean gst_omf_pcm_player_event (GstBaseSink * bsink, GstEvent * event);
+static guint gst_omf_pcm_player_signals[LAST_SIGNAL] = { 0 };
 
 static GParamSpec *pspec_last_message = NULL;
 
 static void
-gst_omf_aud_player_class_init (GstOmfAudPlayerClass * klass)
+gst_omf_pcm_player_class_init (GstOmfPcmPlayerClass * klass)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
@@ -127,9 +139,9 @@ gst_omf_aud_player_class_init (GstOmfAudPlayerClass * klass)
   gstelement_class = GST_ELEMENT_CLASS (klass);
   gstbase_sink_class = GST_BASE_SINK_CLASS (klass);
 
-  gobject_class->set_property = gst_omf_aud_player_set_property;
-  gobject_class->get_property = gst_omf_aud_player_get_property;
-  gobject_class->finalize = gst_omf_aud_player_finalize;
+  gobject_class->set_property = gst_omf_pcm_player_set_property;
+  gobject_class->get_property = gst_omf_pcm_player_get_property;
+  gobject_class->finalize = gst_omf_pcm_player_finalize;
 
   pspec_last_message = g_param_spec_string ("last-message", "Last Message",
       "The message describing current status", DEFAULT_LAST_MESSAGE,
@@ -158,34 +170,34 @@ gst_omf_aud_player_class_init (GstOmfAudPlayerClass * klass)
           G_PARAM_STATIC_STRINGS));
 
   /**
-   * GstOmfAudPlayer::handoff:
-   * @omfaudplayer: the omfaudplayer instance
+   * GstOmfPcmPlayer::handoff:
+   * @omfpcmplayer: the omfpcmplayer instance
    * @buffer: the buffer that just has been received
    * @pad: the pad that received it
    *
    * This signal gets emitted before unreffing the buffer.
    */
-  gst_omf_aud_player_signals[SIGNAL_HANDOFF] =
+  gst_omf_pcm_player_signals[SIGNAL_HANDOFF] =
       g_signal_new ("handoff", G_TYPE_FROM_CLASS (klass), G_SIGNAL_RUN_LAST,
-      G_STRUCT_OFFSET (GstOmfAudPlayerClass, handoff), NULL, NULL,
+      G_STRUCT_OFFSET (GstOmfPcmPlayerClass, handoff), NULL, NULL,
       g_cclosure_marshal_generic, G_TYPE_NONE, 2,
       GST_TYPE_BUFFER | G_SIGNAL_TYPE_STATIC_SCOPE, GST_TYPE_PAD);
 
   /**
-   * GstOmfAudPlayer::preroll-handoff:
-   * @omfaudplayer: the omfaudplayer instance
+   * GstOmfPcmPlayer::preroll-handoff:
+   * @omfpcmplayer: the omfpcmplayer instance
    * @buffer: the buffer that just has been received
    * @pad: the pad that received it
    *
    * This signal gets emitted before unreffing the buffer.
    */
-  gst_omf_aud_player_signals[SIGNAL_PREROLL_HANDOFF] =
+  gst_omf_pcm_player_signals[SIGNAL_PREROLL_HANDOFF] =
       g_signal_new ("preroll-handoff", G_TYPE_FROM_CLASS (klass),
-      G_SIGNAL_RUN_LAST, G_STRUCT_OFFSET (GstOmfAudPlayerClass, preroll_handoff),
+      G_SIGNAL_RUN_LAST, G_STRUCT_OFFSET (GstOmfPcmPlayerClass, preroll_handoff),
       NULL, NULL, g_cclosure_marshal_generic, G_TYPE_NONE, 2,
       GST_TYPE_BUFFER | G_SIGNAL_TYPE_STATIC_SCOPE, GST_TYPE_PAD);
 
-  //audio player param
+  //pcmio player param
   g_object_class_install_property (gobject_class, PROP_RATE,
       g_param_spec_int ("rate", "Rate", "Pcm samplerate", 8000,
           48000, DEFAULT_RATE,
@@ -194,18 +206,6 @@ gst_omf_aud_player_class_init (GstOmfAudPlayerClass * klass)
      g_param_spec_int ("channel", "Channel", "Pcm channel", 1,
           2, DEFAULT_CHANNEL,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-  g_object_class_install_property (gobject_class, PROP_MEDIA,
-	 g_param_spec_string ("codec", "Codec", "The input audio codec, optional:\n"
-	  											"\t\t\t   (-): aac \n"
-	  											"\t\t\t   (-): alaw \n"
-	  											"\t\t\t   (-): ulaw \n"
-	  											"\t\t\t   (-): g722 \n"
-	  											"\t\t\t   (-): opus", NULL,
-		  G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-  g_object_class_install_property (gobject_class, PROP_CODEC_LINUX,
-	 g_param_spec_boolean ("codec-on-linux", "Codec on Linux",
-		   "decode the audio on Linux", DEFAULT_CODEC_LINUX,
-		  G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_LIVE_LIMIT,
 	 g_param_spec_string ("live-limit", "live delay limit", "Limit the play delay when live streaming, optional:\n"
 	  													"\t\t\t   (1): g1={duration=300,speed=1.2},g2={duration=600,speed=1.5}", NULL,
@@ -215,22 +215,22 @@ gst_omf_aud_player_class_init (GstOmfAudPlayerClass * klass)
 	      G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)); 
 
   gst_element_class_set_static_metadata (gstelement_class,
-      "Omf Audio Player",
+      "Omf Pcm Player",
       "Sink",
-      "player for audio",
+      "player for pcm",
       "wang.zhou@icatchtek.com");
 
   gst_element_class_add_static_pad_template (gstelement_class, &sinktemplate);
   
-  gstbase_sink_class->start = GST_DEBUG_FUNCPTR (gst_omf_aud_player_start);
-  gstbase_sink_class->stop = GST_DEBUG_FUNCPTR (gst_omf_aud_player_stop);
-  gstbase_sink_class->event = GST_DEBUG_FUNCPTR (gst_omf_aud_player_event);
-  gstbase_sink_class->preroll = GST_DEBUG_FUNCPTR (gst_omf_aud_player_preroll);
-  gstbase_sink_class->render = GST_DEBUG_FUNCPTR (gst_omf_aud_player_render);
+  gstbase_sink_class->start = GST_DEBUG_FUNCPTR (gst_omf_pcm_player_start);
+  gstbase_sink_class->stop = GST_DEBUG_FUNCPTR (gst_omf_pcm_player_stop);
+  gstbase_sink_class->event = GST_DEBUG_FUNCPTR (gst_omf_pcm_player_event);
+  gstbase_sink_class->preroll = GST_DEBUG_FUNCPTR (gst_omf_pcm_player_preroll);
+  gstbase_sink_class->render = GST_DEBUG_FUNCPTR (gst_omf_pcm_player_render);
 }
 
 static void
-gst_omf_aud_player_init (GstOmfAudPlayer * sink)
+gst_omf_pcm_player_init (GstOmfPcmPlayer * sink)
 {
   sink->silent = DEFAULT_SILENT;
   sink->dump = DEFAULT_DUMP;
@@ -243,31 +243,23 @@ gst_omf_aud_player_init (GstOmfAudPlayer * sink)
 
   sink->rate = DEFAULT_RATE;
   sink->channel = DEFAULT_CHANNEL;
-  sink->codec = DEFAULT_CODEC ? g_strdup(DEFAULT_CODEC) : NULL;
-  sink->codecOnLinux = DEFAULT_CODEC_LINUX;
   sink->liveLimit = DEFAULT_LIVE_LIMIT ? g_strdup(DEFAULT_LIVE_LIMIT) : NULL;
   sink->media = NULL;
-
-  if(sink->codec == NULL){
-  	sink->codec = g_strdup("pcm");
-  }
 
   sink->omf_hd = OmfAudPlayerCreate();
 }
 
 static void
-gst_omf_aud_player_finalize (GObject * obj)
+gst_omf_pcm_player_finalize (GObject * obj)
 {
-  GstOmfAudPlayer *sink;
+  GstOmfPcmPlayer *sink;
   
-  sink = GST_OMF_AUD_PLAYER (obj);
+  sink = GST_OMF_PCM_PLAYER (obj);
 
   if(sink->omf_hd){
 	 OmfAudPlayerDestory(sink->omf_hd);
   }
 
-  g_free(sink->codec);
-  sink->codec = NULL;
   g_free( sink->liveLimit);
   sink->liveLimit = NULL;
 
@@ -275,12 +267,12 @@ gst_omf_aud_player_finalize (GObject * obj)
 }
 
 static void
-gst_omf_aud_player_set_property (GObject * object, guint prop_id,
+gst_omf_pcm_player_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstOmfAudPlayer *sink;
+  GstOmfPcmPlayer *sink;
 
-  sink = GST_OMF_AUD_PLAYER (object);
+  sink = GST_OMF_PCM_PLAYER (object);
 
   switch (prop_id) {
     case PROP_SILENT:
@@ -302,13 +294,6 @@ gst_omf_aud_player_set_property (GObject * object, guint prop_id,
 	case PROP_CHANNEL:
 		sink->channel = g_value_get_int(value);
 		break;
-	case PROP_CODEC:
-		g_free (sink->codec);
-		sink->codec = g_strdup(g_value_get_string(value));
-		break;
-	case PROP_CODEC_LINUX:
-      	sink->codecOnLinux = g_value_get_boolean (value);
-      	break;
 	case PROP_LIVE_LIMIT:
 		g_free (sink->liveLimit);
 		sink->liveLimit = g_strdup(g_value_get_string(value));
@@ -320,12 +305,12 @@ gst_omf_aud_player_set_property (GObject * object, guint prop_id,
 }
 
 static void
-gst_omf_aud_player_get_property (GObject * object, guint prop_id, GValue * value,
+gst_omf_pcm_player_get_property (GObject * object, guint prop_id, GValue * value,
     GParamSpec * pspec)
 {
-  GstOmfAudPlayer *sink;
+  GstOmfPcmPlayer *sink;
 
-  sink = GST_OMF_AUD_PLAYER (object);
+  sink = GST_OMF_PCM_PLAYER (object);
 
   switch (prop_id) {
     case PROP_SILENT:
@@ -352,12 +337,6 @@ gst_omf_aud_player_get_property (GObject * object, guint prop_id, GValue * value
 	case PROP_CHANNEL:
 		g_value_set_int(value, sink->channel);
 		break;
-	case PROP_CODEC:
-		g_value_set_string(value, sink->codec);
-		break;
-	case PROP_CODEC_LINUX:
-     	g_value_set_boolean (value, sink->codecOnLinux);
-		break;
 	case PROP_LIVE_LIMIT:
 		g_value_set_string(value, sink->liveLimit);
 		break;
@@ -371,15 +350,15 @@ gst_omf_aud_player_get_property (GObject * object, guint prop_id, GValue * value
 }
 
 static void
-gst_omf_aud_player_notify_last_message (GstOmfAudPlayer * sink)
+gst_omf_pcm_player_notify_last_message (GstOmfPcmPlayer * sink)
 {
   g_object_notify_by_pspec ((GObject *) sink, pspec_last_message);
 }
 
 static gboolean
-gst_omf_aud_player_event (GstBaseSink * bsink, GstEvent * event)
+gst_omf_pcm_player_event (GstBaseSink * bsink, GstEvent * event)
 {
-  GstOmfAudPlayer *sink = GST_OMF_AUD_PLAYER (bsink);
+  GstOmfPcmPlayer *sink = GST_OMF_PCM_PLAYER (bsink);
 
   if (!sink->silent) {
     const GstStructure *s;
@@ -418,16 +397,16 @@ gst_omf_aud_player_event (GstBaseSink * bsink, GstEvent * event)
     g_free (sstr);
     GST_OBJECT_UNLOCK (sink);
 
-    gst_omf_aud_player_notify_last_message (sink);
+    gst_omf_pcm_player_notify_last_message (sink);
   }
 
   return GST_BASE_SINK_CLASS (parent_class)->event (bsink, event);
 }
 
 static GstFlowReturn
-gst_omf_aud_player_preroll (GstBaseSink * bsink, GstBuffer * buffer)
+gst_omf_pcm_player_preroll (GstBaseSink * bsink, GstBuffer * buffer)
 {
-  GstOmfAudPlayer *sink = GST_OMF_AUD_PLAYER (bsink);
+  GstOmfPcmPlayer *sink = GST_OMF_PCM_PLAYER (bsink);
 
   if (!sink->silent) {
     GST_OBJECT_LOCK (sink);
@@ -436,11 +415,11 @@ gst_omf_aud_player_preroll (GstBaseSink * bsink, GstBuffer * buffer)
     sink->last_message = g_strdup_printf ("preroll   ******* ");
     GST_OBJECT_UNLOCK (sink);
 
-    gst_omf_aud_player_notify_last_message (sink);
+    gst_omf_pcm_player_notify_last_message (sink);
   }
   if (sink->signal_handoffs) {
     g_signal_emit (sink,
-        gst_omf_aud_player_signals[SIGNAL_PREROLL_HANDOFF], 0, buffer,
+        gst_omf_pcm_player_signals[SIGNAL_PREROLL_HANDOFF], 0, buffer,
         bsink->sinkpad);
   }
   return GST_FLOW_OK;
@@ -454,9 +433,9 @@ eos:
 }
 
 static GstFlowReturn
-gst_omf_aud_player_render (GstBaseSink * bsink, GstBuffer * buf)
+gst_omf_pcm_player_render (GstBaseSink * bsink, GstBuffer * buf)
 {
-  GstOmfAudPlayer *sink = GST_OMF_AUD_PLAYER_CAST (bsink);
+  GstOmfPcmPlayer *sink = GST_OMF_PCM_PLAYER_CAST (bsink);
 
   if(sink->omf_hd && buf){
 	OmfFrameC_t frame;
@@ -517,10 +496,10 @@ gst_omf_aud_player_render (GstBaseSink * bsink, GstBuffer * buf)
     g_free (meta_str);
     GST_OBJECT_UNLOCK (sink);
 
-    gst_omf_aud_player_notify_last_message (sink);
+    gst_omf_pcm_player_notify_last_message (sink);
   }
   if (sink->signal_handoffs)
-    g_signal_emit (sink, gst_omf_aud_player_signals[SIGNAL_HANDOFF], 0, buf,
+    g_signal_emit (sink, gst_omf_pcm_player_signals[SIGNAL_HANDOFF], 0, buf,
         bsink->sinkpad);
 
   if (sink->dump) {
@@ -543,22 +522,18 @@ eos:
 }
 
 static gboolean
-gst_omf_aud_player_start (GstBaseSink * bsink)
+gst_omf_pcm_player_start (GstBaseSink * bsink)
 {
-  GstOmfAudPlayer *sink;
+  GstOmfPcmPlayer *sink;
 
-  sink = GST_OMF_AUD_PLAYER (bsink);
+  sink = GST_OMF_PCM_PLAYER (bsink);
 
   g_return_val_if_fail(sink->omf_hd, FALSE);
 
   OmfAudPlayerSetSampleRate(sink->omf_hd, sink->rate);
   OmfAudPlayerSetChannel(sink->omf_hd, sink->channel);
-  if(sink->media){
-  	OmfAudPlayerSetMediaInfo(sink->omf_hd, sink->media);
-  }
-  if(sink->codecOnLinux){
-	OmfAudPlayerSetCodecOnLinux(sink->omf_hd, sink->codecOnLinux);	
-  }
+  OmfAudPlayerSetMediaInfo(sink->omf_hd, "pcm");
+ 
   if(sink->liveLimit){
 	OmfAudPlayerSetLiveDelayLimit(sink->omf_hd, sink->liveLimit);
   }
@@ -569,11 +544,11 @@ gst_omf_aud_player_start (GstBaseSink * bsink)
 }
 
 static gboolean
-gst_omf_aud_player_stop (GstBaseSink * bsink)
+gst_omf_pcm_player_stop (GstBaseSink * bsink)
 {
-  GstOmfAudPlayer *sink;
+  GstOmfPcmPlayer *sink;
 
-  sink = GST_OMF_AUD_PLAYER (bsink);
+  sink = GST_OMF_PCM_PLAYER (bsink);
 
   GST_OBJECT_LOCK (sink);
 

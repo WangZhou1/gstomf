@@ -9,6 +9,7 @@ EXTERNC BOOL  OmfJpegSrcGetFrame(void* hd, OmfFrameC_t* frame);
 EXTERNC BOOL  OmfJpegSrcSelectSensor(void* hd, int id);
 EXTERNC BOOL  OmfJpegSrcSetWidth(void* hd, int width);
 EXTERNC BOOL  OmfJpegSrcSetHeight(void* hd, int height);
+EXTERNC BOOL  OmfJpegSrcSetFrameRate(void* hd, int fr);
 EXTERNC BOOL  OmfJpegSrcSetQP(void* hd, int qp);
 EXTERNC BOOL  OmfJpegSrcSetPreRecord(void* hd, unsigned group); 
 EXTERNC BOOL  OmfJpegSrcGetMediaInfo(void* hd, const char** pmedia);

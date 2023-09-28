@@ -86,7 +86,7 @@ typedef struct _GstOmfAudSrc {
 
   guint			samples;
   guint			rate;
-  guint			channel;
+  guint			channels;
 
   gchar*		codec;
   
@@ -100,6 +100,9 @@ typedef struct _GstOmfAudSrc {
   guint 		shareidx;
 
   guint			cache;
+
+  long long 	spts_ns;	
+  long long		lpts_ns;
 
   const gchar*	media;
 

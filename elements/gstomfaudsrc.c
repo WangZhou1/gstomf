@@ -44,13 +44,54 @@
 //#include "gstelements_private.h"
 #include "gstomfaudsrc.h"
 
-static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
+///
+#define SAMPLE_RATES 	" 8000, " \
+                   	 	"11025, " \
+                   	 	"12000, " \
+                   	 	"16000, " \
+                   	 	"22050, " \
+                     	"24000, " \
+                     	"32000, " \
+                     	"44100, " \
+                     	"48000, " \
+                     	"64000, " \
+                     	"88200, " \
+                     	"96000"
+
+#define AUDIO_X_RAW		"audio/x-raw, " \
+					    "format = (string) S16LE, " \
+					    "rate = (int) { " SAMPLE_RATES " }, " \
+					    "channels = (int) [ 1, 2 ] "
+
+#define AUDIO_MPEG 		"audio/mpeg, " \
+        				"mpegversion = (int) 4, " \
+        				"rate = (int) { " SAMPLE_RATES " }, " \
+        				"channels = (int) [1, 2], " \
+        				"stream-format = (string) adts, base-profile = (string) hc"
+
+#define AUDIO_X_ALAW	"audio/x-mulaw," \
+						"rate = (int) [ 8000, 192000 ], " \
+						"channels = (int) [ 1 , 2 ] "
+
+#define AUDIO_X_MULAW 	"audio/x-mulaw," \
+						"rate = (int) [ 8000, 192000 ], " \
+						"channels = (int) [ 1 , 2 ] "
+
+#define AUDIO_G722		"audio/G722,"			\
+						"rate = (int) 16000, "	\
+        				"channels = (int) 1 "	\
+///
+static GstStaticPadTemplate srctemplate = 
+GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS(
-    	"audio/,"
-	    "rate = (int) [ 8000, 48000 ],"
-		"channels = (int) { 1, 2 }"
+	    AUDIO_X_RAW "; "
+	    AUDIO_X_ALAW "; "
+	    AUDIO_X_MULAW "; "
+	    AUDIO_G722 "; "
+	    AUDIO_MPEG "; "
+        "audio/x-opus "
 	));
 
 GST_DEBUG_CATEGORY_STATIC (gst_omf_aud_src_debug);
@@ -67,7 +108,7 @@ enum
 #define DEFAULT_SIGNAL_HANDOFFS FALSE
 #define DEFAULT_SILENT          TRUE
 #define DEFAULT_DUMP            FALSE
-#define DEFAULT_FORMAT          GST_FORMAT_BYTES
+#define DEFAULT_FORMAT          GST_FORMAT_TIME
 #define DEFAULT_SAMPLES			1600
 #define DEFAULT_RATE			16000
 #define DEFAULT_CHANNEL			1
@@ -79,6 +120,8 @@ enum
 #define DEFAULT_PREREC_PIPE		NULL
 #define DEFAULT_SHARE			0
 #define DEFAULT_CACHE			0
+
+#define DEFAULT_FORMAT_STR 		"S16LE"
 
 enum
 {
@@ -111,11 +154,11 @@ gst_omf_aud_src_get_aec_level (void)
 {
   static GType omfaudsrc_aec_level_type = 0;
   static const GEnumValue omfaudsrc_aec_level[] = {
-	{OMF_AUD_SRC_AEC_LEVEL_NONE, "Do not use AEC", ""},
-	{OMF_AUD_SRC_AEC_LEVEL_L, "Level low", "Low"},
-	{OMF_AUD_SRC_AEC_LEVEL_M, "Level middle", "Middle"},
-	{OMF_AUD_SRC_AEC_LEVEL_H, "Level high", "High"},
-	{0, NULL, NULL},
+	{ OMF_AUD_SRC_AEC_LEVEL_NONE, "Do not use AEC", "" },
+	{ OMF_AUD_SRC_AEC_LEVEL_L, "Level low", "Low" },
+	{ OMF_AUD_SRC_AEC_LEVEL_M, "Level middle", "Middle" },
+	{ OMF_AUD_SRC_AEC_LEVEL_H, "Level high", "High" },
+	{ 0, NULL, NULL },
   };
 
   if (!omfaudsrc_aec_level_type) {
@@ -131,11 +174,11 @@ gst_omf_aud_src_get_ans_mode (void)
 {
   static GType omfaudsrc_ans_mode_type = 0;
   static const GEnumValue omfaudsrc_ans_mode[] = {
-	{OMF_AUD_SRC_ANS_MODE_NONE, "Do not use ANS", ""},
-	{OMF_AUD_SRC_ANS_MODE_MILD, "Mode mild", "Mild"},
-	{OMF_AUD_SRC_ANS_MODE_MEDIUM, "Mode medium", "Medium"},
-	{OMF_AUD_SRC_ANS_MODE_AGGRESSIVE, "Mode aggresive", "Aggressive"},
-	{0, NULL, NULL},
+	{ OMF_AUD_SRC_ANS_MODE_NONE, "Do not use ANS", "" },
+	{ OMF_AUD_SRC_ANS_MODE_MILD, "Mode mild", "Mild" },
+	{ OMF_AUD_SRC_ANS_MODE_MEDIUM, "Mode medium", "Medium" },
+	{ OMF_AUD_SRC_ANS_MODE_AGGRESSIVE, "Mode aggresive", "Aggressive" },
+	{ 0, NULL, NULL },
   };
 
   if (!omfaudsrc_ans_mode_type) {
@@ -156,6 +199,10 @@ static void gst_omf_aud_src_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void gst_omf_aud_src_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
+
+static gboolean gst_omf_aud_src_setcaps (GstBaseSrc * basesrc,
+    GstCaps * caps);
+static GstCaps *gst_omf_aud_src_fixate (GstBaseSrc * bsrc, GstCaps * caps);
 
 static gboolean gst_omf_aud_src_start (GstBaseSrc * basesrc);
 static gboolean gst_omf_aud_src_stop (GstBaseSrc * basesrc);
@@ -214,7 +261,7 @@ gst_omf_aud_src_class_init (GstOmfAudSrcClass * klass)
           48000, DEFAULT_RATE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_CHANNEL,
-      g_param_spec_int ("channel", "Channel", "Pcm channel", 1,
+      g_param_spec_int ("channels", "Channels", "Pcm channel", 1,
           2, DEFAULT_CHANNEL,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_CODEC,
@@ -262,6 +309,8 @@ gst_omf_aud_src_class_init (GstOmfAudSrcClass * klass)
       "wang.zhou@icatchtek.com");
   gst_element_class_add_static_pad_template (gstelement_class, &srctemplate);
 
+  gstbase_src_class->set_caps = GST_DEBUG_FUNCPTR (gst_omf_aud_src_setcaps);
+  gstbase_src_class->fixate = GST_DEBUG_FUNCPTR (gst_omf_aud_src_fixate);
   gstbase_src_class->is_seekable = GST_DEBUG_FUNCPTR (gst_omf_aud_src_is_seekable);
   gstbase_src_class->start = GST_DEBUG_FUNCPTR (gst_omf_aud_src_start);
   gstbase_src_class->stop = GST_DEBUG_FUNCPTR (gst_omf_aud_src_stop);
@@ -279,9 +328,13 @@ gst_omf_aud_src_init (GstOmfAudSrc * omfaudsrc)
   omfaudsrc->format = DEFAULT_FORMAT;
   omfaudsrc->last_message = NULL;
 
+    /* we operate in time */
+  gst_base_src_set_format (GST_BASE_SRC (omfaudsrc), DEFAULT_FORMAT);
+  gst_base_src_set_live (GST_BASE_SRC (omfaudsrc), FALSE);
+
   omfaudsrc->samples = DEFAULT_SAMPLES;
   omfaudsrc->rate = DEFAULT_RATE;
-  omfaudsrc->channel = DEFAULT_CHANNEL;
+  omfaudsrc->channels = DEFAULT_CHANNEL;
   omfaudsrc->codec = DEFAULT_CODEC ? strdup(DEFAULT_CODEC) : NULL;
   omfaudsrc->aec = DEFAULT_AEC;
   omfaudsrc->ans = DEFAULT_ANS;
@@ -290,10 +343,65 @@ gst_omf_aud_src_init (GstOmfAudSrc * omfaudsrc)
   omfaudsrc->prerecpipe = DEFAULT_PREREC_PIPE ? strdup(DEFAULT_PREREC_PIPE) : NULL;
   omfaudsrc->shareidx = DEFAULT_SHARE;
   omfaudsrc->cache = DEFAULT_CACHE;
+  omfaudsrc->spts_ns = -1;
+  omfaudsrc->lpts_ns = -1;
+  omfaudsrc->media = NULL;
 
   omfaudsrc->omf_hd = OmfAudSrcCreate();
 
 }
+
+static GstCaps *
+gst_omf_aud_src_fixate (GstBaseSrc * bsrc, GstCaps * caps)
+{
+  GstOmfAudSrc *src = GST_OMF_AUD_SRC (bsrc);
+  GstStructure *structure;
+  gint channels;
+
+  caps = gst_caps_make_writable (caps);
+  
+  structure = gst_caps_get_structure (caps, 0);
+
+  if(!src->codec){
+
+  }
+  else if(strstr(src->codec, "g722")){
+	
+  }
+  else if(strstr(src->codec, "opus")){
+	caps = gst_caps_new_simple ("audio/mpeg",
+        			"mpegversion", G_TYPE_INT, 4, NULL);
+  }
+  else if(strstr(src->codec, "aac")){
+	caps = gst_caps_new_simple ("audio/opus", NULL);
+  }
+
+  gst_structure_fixate_field_nearest_int (structure, "rate", src->rate);
+  gst_structure_fixate_field_nearest_int (structure, "channels", src->channels);  
+
+  caps = GST_BASE_SRC_CLASS (parent_class)->fixate (bsrc, caps);
+
+  return caps;
+}
+
+static gboolean
+gst_omf_aud_src_setcaps (GstBaseSrc * bsrc, GstCaps * caps)
+{
+  GstOmfAudSrc *src = GST_OMF_AUD_SRC (bsrc);
+
+  GST_DEBUG_OBJECT (src, "negotiated to caps %" GST_PTR_FORMAT, caps);
+
+  return TRUE;
+
+  /* ERROR */
+invalid_caps:
+  {
+	GST_ERROR_OBJECT (bsrc, "received invalid caps");
+	return FALSE;
+  }
+
+}
+
 
 static void
 gst_omf_aud_src_finalize (GObject * object)
@@ -381,7 +489,7 @@ gst_omf_aud_src_set_property (GObject * object, guint prop_id,
 		src->rate = g_value_get_int(value);
 		break;
 	case PROP_CHANNEL:
-		src->channel = g_value_get_int(value);
+		src->channels = g_value_get_int(value);
 		break;
 	case PROP_CODEC:
 		g_free (src->codec);
@@ -450,7 +558,7 @@ gst_omf_aud_src_get_property (GObject * object, guint prop_id, GValue * value,
 		g_value_set_int(value, src->rate);
 		break;
 	case PROP_CHANNEL:
-		g_value_set_int(value, src->channel);
+		g_value_set_int(value, src->channels);
 		break;
 	case PROP_CODEC:
 		g_value_set_string(value, src->codec);
@@ -561,18 +669,27 @@ gst_omf_aud_src_create (GstBaseSrc * basesrc, guint64 offset, guint length,
 	 
 	  buf =  gst_omf_aud_src_alloc_buffer (src, size, frame.data, frame.free);
 	  if(buf){
-	  	///
-		GST_BUFFER_PTS(buf) = frame.pts_ms;
-		GST_BUFFER_DTS(buf) = frame.pts_ms;
-	  	GST_BUFFER_OFFSET(buf) = frame.index;	
+		if(src->spts_ns == -1){
+			src->spts_ns = frame.pts_ns;
+		}
+		///
+		GST_BUFFER_PTS(buf) = frame.pts_ns - src->spts_ns;
+		GST_BUFFER_DTS(buf) = GST_CLOCK_TIME_NONE;
+		
+		GST_BUFFER_OFFSET(buf) = frame.index;
+		GST_BUFFER_OFFSET_END(buf) = frame.index + 1;
+
+		GST_BUFFER_DURATION (buf) = src->samples * 1000000000 / src->rate;
+
 		GST_MINI_OBJECT_CAST (buf)->flags = frame.iskeyframe;
+		
+		gst_object_sync_values (GST_OBJECT (src), GST_BUFFER_TIMESTAMP (buf));
 	  }
 	}
   }
 
   if (!src->silent) {
     gchar dts_str[64], pts_str[64], dur_str[64];
-    gchar *flag_str;
 
     GST_OBJECT_LOCK (src);
     g_free (src->last_message);
@@ -596,16 +713,15 @@ gst_omf_aud_src_create (GstBaseSrc * basesrc, guint64 offset, guint length,
       g_strlcpy (dur_str, "none", sizeof (dur_str));
     }
 
-    flag_str = gst_buffer_get_flags_string (buf);
     src->last_message =
         g_strdup_printf ("create   ******* (%s:%s) (%u bytes, dts: %s, pts:%s"
         ", duration: %s, offset: %" G_GINT64_FORMAT ", offset_end: %"
-        G_GINT64_FORMAT ", flags: %08x %s) %p",
+        G_GINT64_FORMAT ", flags: %08x ) %p",
         GST_DEBUG_PAD_NAME (GST_BASE_SRC_CAST (src)->srcpad), (guint) size,
         dts_str, pts_str, dur_str, GST_BUFFER_OFFSET (buf),
         GST_BUFFER_OFFSET_END (buf), GST_MINI_OBJECT_CAST (buf)->flags,
-        flag_str, buf);
-    g_free (flag_str);
+         buf);
+
     GST_OBJECT_UNLOCK (src);
 
     g_object_notify_by_pspec ((GObject *) src, pspec_last_message);
@@ -647,7 +763,7 @@ gst_omf_aud_src_start (GstBaseSrc * basesrc)
 
   OmfAudSrcSetMicSamples(src->omf_hd, src->samples);	
   OmfAudSrcSetSampleRate(src->omf_hd, src->rate);
-  OmfAudSrcSetChannel(src->omf_hd, src->channel);
+  OmfAudSrcSetChannel(src->omf_hd, src->channels);
 
   if(src->codec){
 	OmfAudSrcSetCodec(src->omf_hd, src->codec);

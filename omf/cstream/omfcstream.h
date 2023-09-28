@@ -34,7 +34,7 @@ typedef struct OmfFrameC_s{
 	void*data;
 	int size;
 	int iskeyframe;
-	long long pts_ms;
+	long long pts_ns;
 	void (*free)(void*free_data);
 	//void*free_data;
 	//void*pkt;

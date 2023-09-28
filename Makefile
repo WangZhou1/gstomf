@@ -14,8 +14,8 @@ CFLAGS += -DHAVE_CONFIG_H
 
 CFLAGS += -I. 
 CFLAGS += -I./gst/include/ 
-CFLAGS += -I/home/wang.zhou/project/v57/gds/ES2/bsp4_glibc/staging_dir/target-arm-linux_glibc/usr/include/gstreamer-1.0/
-CFLAGS += -I/home/wang.zhou/project/v57/gds/ES2/bsp4_glibc/staging_dir/target-arm-linux_glibc/usr/include/glib-2.0/
+CFLAGS += -I/home/wang.zhou/project/v57/gds/ES2/bsp4_gst/staging_dir/target-arm-linux_glibc/usr/include/gstreamer-1.0/
+CFLAGS += -I/home/wang.zhou/project/v57/gds/ES2/bsp4_gst/staging_dir/target-arm-linux_glibc/usr/include/glib-2.0/
 
 CFLAGS += -I./omf/include/ 
 CFLAGS += -I./omf/include/streaming/ 

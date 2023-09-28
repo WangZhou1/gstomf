@@ -43,15 +43,29 @@
 //#include "gstelements_private.h"
 #include "gstomfpcmsrc.h"
 
-static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
+#define SAMPLE_RATES " 8000, " \
+                    "11025, " \
+                    "12000, " \
+                    "16000, " \
+                    "22050, " \
+                    "24000, " \
+                    "32000, " \
+                    "44100, " \
+                    "48000, " \
+                    "64000, " \
+                    "88200, " \
+                    "96000"
+
+
+static GstStaticPadTemplate srctemplate = 
+GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS(
-    	"audio/x-raw-int,"
-		"width = (int) 16,"
-		"depth = (int) 16,"
-		"channels = (int) { 1, 2 },"
-		"rate = (int) [ 8000, 48000 ]"
+    GST_STATIC_CAPS("audio/x-raw, "
+    	"format = (string) S16LE , "
+    	"layout = (string) interleaved, "
+		"rate = (int) { " SAMPLE_RATES " } , "
+		"channels = (int) [ 1, 2 ]"
 	));
 
 GST_DEBUG_CATEGORY_STATIC (gst_omf_pcm_src_debug);
@@ -68,7 +82,8 @@ enum
 #define DEFAULT_SIGNAL_HANDOFFS FALSE
 #define DEFAULT_SILENT          TRUE
 #define DEFAULT_DUMP            FALSE
-#define DEFAULT_FORMAT          GST_FORMAT_BYTES
+#define DEFAULT_FORMAT          GST_FORMAT_TIME
+#define DEFAULT_SAMPLES			1600
 #define DEFAULT_RATE			16000
 #define DEFAULT_CHANNEL			1
 #define DEFAULT_AEC				OMF_PCM_SRC_AEC_LEVEL_NONE
@@ -76,6 +91,9 @@ enum
 #define	DEFAULT_PREREC_IDX		0
 #define DEFAULT_PREREC_PIPE		NULL
 #define DEFAULT_CACHE			0
+
+
+#define DEFAULT_FORMAT_STR 		"S16LE"
 
 enum
 {
@@ -86,6 +104,7 @@ enum
   PROP_LAST_MESSAGE,
   PROP_FORMAT,
   ///
+  PROP_SAMPELS,
   PROP_RATE,
   PROP_CHANNEL,
   PROP_AEC,
@@ -103,11 +122,11 @@ gst_omf_pcm_src_get_aec_level (void)
 {
   static GType omfpcmsrc_aec_level_type = 0;
   static const GEnumValue omfpcmsrc_aec_level[] = {
-	{OMF_PCM_SRC_AEC_LEVEL_NONE, "Do not use AEC", ""},
-	{OMF_PCM_SRC_AEC_LEVEL_L, "Level low", "Low"},
-	{OMF_PCM_SRC_AEC_LEVEL_M, "Level middle", "Middle"},
-	{OMF_PCM_SRC_AEC_LEVEL_H, "Level high", "High"},
-	{0, NULL, NULL},
+	{ OMF_PCM_SRC_AEC_LEVEL_NONE, "Do not use AEC", "" },
+	{ OMF_PCM_SRC_AEC_LEVEL_L, "Level low", "Low" },
+	{ OMF_PCM_SRC_AEC_LEVEL_M, "Level middle", "Middle" },
+	{ OMF_PCM_SRC_AEC_LEVEL_H, "Level high", "High" },
+	{ 0, NULL, NULL },
   };
 
   if (!omfpcmsrc_aec_level_type) {
@@ -123,11 +142,11 @@ gst_omf_pcm_src_get_ans_mode (void)
 {
   static GType omfpcmsrc_ans_mode_type = 0;
   static const GEnumValue omfpcmsrc_ans_mode[] = {
-	{OMF_PCM_SRC_ANS_MODE_NONE, "Do not use ANS", ""},
-	{OMF_PCM_SRC_ANS_MODE_MILD, "Mode mild", "Mild"},
-	{OMF_PCM_SRC_ANS_MODE_MEDIUM, "Mode medium", "Medium"},
-	{OMF_PCM_SRC_ANS_MODE_AGGRESSIVE, "Mode aggresive", "Aggressive"},
-	{0, NULL, NULL},
+	{ OMF_PCM_SRC_ANS_MODE_NONE, "Do not use ANS", "" },
+	{ OMF_PCM_SRC_ANS_MODE_MILD, "Mode mild", "Mild" },
+	{ OMF_PCM_SRC_ANS_MODE_MEDIUM, "Mode medium", "Medium" },
+	{ OMF_PCM_SRC_ANS_MODE_AGGRESSIVE, "Mode aggresive", "Aggressive" },
+	{ 0, NULL, NULL },
   };
 
   if (!omfpcmsrc_ans_mode_type) {
@@ -148,6 +167,10 @@ static void gst_omf_pcm_src_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void gst_omf_pcm_src_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
+
+static gboolean gst_omf_pcm_src_setcaps (GstBaseSrc * basesrc,
+    GstCaps * caps);
+static GstCaps *gst_omf_pcm_src_fixate (GstBaseSrc * bsrc, GstCaps * caps);
 
 static gboolean gst_omf_pcm_src_start (GstBaseSrc * basesrc);
 static gboolean gst_omf_pcm_src_stop (GstBaseSrc * basesrc);
@@ -202,7 +225,7 @@ gst_omf_pcm_src_class_init (GstOmfPcmSrcClass * klass)
           48000, DEFAULT_RATE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_CHANNEL,
-      g_param_spec_int ("channel", "Channel", "Pcm channel", 1,
+      g_param_spec_int ("channels", "Channels", "Pcm channel", 1,
           2, DEFAULT_CHANNEL,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_AEC,
@@ -235,6 +258,8 @@ gst_omf_pcm_src_class_init (GstOmfPcmSrcClass * klass)
       "wang.zhou@icatchtek.com");
   gst_element_class_add_static_pad_template (gstelement_class, &srctemplate);
 
+  gstbase_src_class->set_caps = GST_DEBUG_FUNCPTR (gst_omf_pcm_src_setcaps);
+  gstbase_src_class->fixate = GST_DEBUG_FUNCPTR (gst_omf_pcm_src_fixate);
   gstbase_src_class->is_seekable = GST_DEBUG_FUNCPTR (gst_omf_pcm_src_is_seekable);
   gstbase_src_class->start = GST_DEBUG_FUNCPTR (gst_omf_pcm_src_start);
   gstbase_src_class->stop = GST_DEBUG_FUNCPTR (gst_omf_pcm_src_stop);
@@ -251,17 +276,71 @@ gst_omf_pcm_src_init (GstOmfPcmSrc * omfpcmsrc)
   omfpcmsrc->dump = DEFAULT_DUMP;
   omfpcmsrc->format = DEFAULT_FORMAT;
   omfpcmsrc->last_message = NULL;
-  
+
+  /* we operate in time */
+  gst_base_src_set_format (GST_BASE_SRC (omfpcmsrc), DEFAULT_FORMAT);
+  gst_base_src_set_live (GST_BASE_SRC (omfpcmsrc), FALSE);
+
+  omfpcmsrc->samples = DEFAULT_SAMPLES;
   omfpcmsrc->rate = DEFAULT_RATE;
-  omfpcmsrc->channel = DEFAULT_CHANNEL;
+  omfpcmsrc->channels = DEFAULT_CHANNEL;
   omfpcmsrc->aec = DEFAULT_AEC;
   omfpcmsrc->ans = DEFAULT_ANS;
   omfpcmsrc->prerecidx = DEFAULT_PREREC_IDX;
   omfpcmsrc->prerecpipe = DEFAULT_PREREC_PIPE ? strdup(DEFAULT_PREREC_PIPE) : NULL;
   omfpcmsrc->cache = DEFAULT_CACHE;
+  omfpcmsrc->spts_ns = -1;
+  omfpcmsrc->lpts_ns = -1;
   omfpcmsrc->media = NULL;
 
   omfpcmsrc->omf_hd = OmfPcmSrcCreate();
+
+}
+
+static GstCaps *
+gst_omf_pcm_src_fixate (GstBaseSrc * bsrc, GstCaps * caps)
+{
+  GstOmfPcmSrc *src = GST_OMF_PCM_SRC (bsrc);
+  GstStructure *structure;
+  gint channels;
+
+  caps = gst_caps_make_writable (caps);
+  
+  structure = gst_caps_get_structure (caps, 0);
+
+  gst_structure_fixate_field_nearest_int (structure, "rate", src->rate);
+
+  gst_structure_fixate_field_string (structure, "format", DEFAULT_FORMAT_STR);
+  
+  gst_structure_fixate_field_nearest_int (structure, "channels", src->channels);  
+
+  if (gst_structure_get_int (structure, "channels", &channels) && channels > 2) {
+    if (!gst_structure_has_field_typed (structure, "channel-mask",
+            GST_TYPE_BITMASK))
+      gst_structure_set (structure, "channel-mask", GST_TYPE_BITMASK, 0ULL,
+          NULL);
+  }
+
+  caps = GST_BASE_SRC_CLASS (parent_class)->fixate (bsrc, caps);
+
+  return caps;
+}
+
+static gboolean
+gst_omf_pcm_src_setcaps (GstBaseSrc * bsrc, GstCaps * caps)
+{
+  GstOmfPcmSrc *src = GST_OMF_PCM_SRC (bsrc);
+
+  GST_DEBUG_OBJECT (src, "negotiated to caps %" GST_PTR_FORMAT, caps);
+
+  return TRUE;
+
+  /* ERROR */
+invalid_caps:
+  {
+	GST_ERROR_OBJECT (bsrc, "received invalid caps");
+	return FALSE;
+  }
 
 }
 
@@ -339,11 +418,14 @@ gst_omf_pcm_src_set_property (GObject * object, guint prop_id,
     case PROP_DUMP:
       src->dump = g_value_get_boolean (value);
       break;
+	case PROP_SAMPELS:
+		src->samples = g_value_get_int(value);
+		break;
 	case PROP_RATE:
 		src->rate = g_value_get_int(value);
 		break;
 	case PROP_CHANNEL:
-		src->channel = g_value_get_int(value);
+		src->channels = g_value_get_int(value);
 		break;
 	case PROP_AEC:
 		src->aec = (GstOmfPcmSrcAecLevel)g_value_get_enum(value);
@@ -394,11 +476,14 @@ gst_omf_pcm_src_get_property (GObject * object, guint prop_id, GValue * value,
       	g_value_set_string (value, src->last_message);
       	GST_OBJECT_UNLOCK (src);
       	break;
+	case PROP_SAMPELS:
+		g_value_set_int(value, src->samples);
+		break;
 	case PROP_RATE:
 		g_value_set_int(value, src->rate);
 		break;
 	case PROP_CHANNEL:
-		g_value_set_int(value, src->channel);
+		g_value_set_int(value, src->channels);
 		break;
 	case PROP_AEC:
 		g_value_set_enum(value, src->aec);
@@ -415,13 +500,16 @@ gst_omf_pcm_src_get_property (GObject * object, guint prop_id, GValue * value,
 	case PROP_CACHE:
 		g_value_set_int(value, src->cache);
 		break;
+	case PROP_MEDIA:
+		g_value_set_string(value, src->media);
+		break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
   }
 }
 
-static void data_free(void* data){printf("f");
+static void data_free(void* data){
 	if(data) free(data);
 }	
 
@@ -501,18 +589,28 @@ gst_omf_pcm_src_create (GstBaseSrc * basesrc, guint64 offset, guint length,
 	 
 	  buf =  gst_omf_pcm_src_alloc_buffer (src, size, frame.data, frame.free);
 	  if(buf){
+	  	if(src->spts_ns == -1){
+			src->spts_ns = frame.pts_ns;
+		}
 		///
-		GST_BUFFER_PTS(buf) = frame.pts_ms;
-		GST_BUFFER_DTS(buf) = frame.pts_ms;
-	  	GST_BUFFER_OFFSET(buf) = frame.index;	
+		GST_BUFFER_PTS(buf) = frame.pts_ns - src->spts_ns;
+		GST_BUFFER_DTS(buf) = GST_CLOCK_TIME_NONE;
+		
+	  	GST_BUFFER_OFFSET(buf) = frame.index;
+		GST_BUFFER_OFFSET_END(buf) = frame.index + 1;
+
+		GST_BUFFER_DURATION (buf) = src->samples * 1000000000 / src->rate;
+
 		GST_MINI_OBJECT_CAST (buf)->flags = frame.iskeyframe;
+
+    	gst_object_sync_values (GST_OBJECT (src), GST_BUFFER_TIMESTAMP (buf));
+		
 	  }
 	}	
   }
   
   if (!src->silent) {
     gchar dts_str[64], pts_str[64], dur_str[64];
-    gchar *flag_str;
 
     GST_OBJECT_LOCK (src);
     g_free (src->last_message);
@@ -536,16 +634,15 @@ gst_omf_pcm_src_create (GstBaseSrc * basesrc, guint64 offset, guint length,
       g_strlcpy (dur_str, "none", sizeof (dur_str));
     }
 
-    flag_str = gst_buffer_get_flags_string (buf);
     src->last_message =
         g_strdup_printf ("create   ******* (%s:%s) (%u bytes, dts: %s, pts:%s"
         ", duration: %s, offset: %" G_GINT64_FORMAT ", offset_end: %"
-        G_GINT64_FORMAT ", flags: %08x %s) %p",
+        G_GINT64_FORMAT ", flags: %08x ) %p",
         GST_DEBUG_PAD_NAME (GST_BASE_SRC_CAST (src)->srcpad), (guint) size,
         dts_str, pts_str, dur_str, GST_BUFFER_OFFSET (buf),
         GST_BUFFER_OFFSET_END (buf), GST_MINI_OBJECT_CAST (buf)->flags,
-        flag_str, buf);
-    g_free (flag_str);
+         buf);
+	
     GST_OBJECT_UNLOCK (src);
 
     g_object_notify_by_pspec ((GObject *) src, pspec_last_message);
@@ -585,8 +682,9 @@ gst_omf_pcm_src_start (GstBaseSrc * basesrc)
 
   g_return_val_if_fail(src->omf_hd, FALSE);
 
+  OmfPcmSrcSetMicSamples(src->omf_hd, src->samples);	
   OmfPcmSrcSetSampleRate(src->omf_hd, src->rate);
-  OmfPcmSrcSetChannel(src->omf_hd, src->channel);
+  OmfPcmSrcSetChannel(src->omf_hd, src->channels);
 
   if(src->prerecidx){
   	OmfPcmSrcSetPreRecord(src->omf_hd, src->prerecidx);
@@ -595,10 +693,10 @@ gst_omf_pcm_src_start (GstBaseSrc * basesrc)
 	OmfPcmSrcSetPreRecordPipe(src->omf_hd, src->prerecpipe);
   }
   if(src->aec != OMF_PCM_SRC_AEC_LEVEL_NONE){
-	OmfAudSrcSetAEC(src->omf_hd, src->aec);	
+	OmfPcmSrcSetAEC(src->omf_hd, src->aec);	
   }
   if(src->ans != OMF_PCM_SRC_ANS_MODE_NONE){
-	OmfAudSrcSetANS(src->omf_hd, src->ans);
+	OmfPcmSrcSetANS(src->omf_hd, src->ans);
   }
   if(src->cache){
 	OmfPcmSrcSetCache(src->omf_hd, src->cache);

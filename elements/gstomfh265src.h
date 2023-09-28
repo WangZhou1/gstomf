@@ -92,6 +92,9 @@ typedef struct _GstOmfH265Src {
 
   const gchar*	media;
 
+  long long 	spts_ns;	
+  long long		lpts_ns;
+
   gpointer 		omf_hd;
 } GstOmfH265Src;
 

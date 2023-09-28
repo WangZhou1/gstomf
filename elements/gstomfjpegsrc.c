@@ -44,13 +44,14 @@
 //#include "gstelements_private.h"
 #include "gstomfjpegsrc.h"
 
-static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
+static GstStaticPadTemplate srctemplate = 
+GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS(
-    	"image/jpeg,"
-		"width = (int) [ 480, 4096 ],"
-		"height = (int) [ 320, 2160 ]"
+    GST_STATIC_CAPS("image/jpeg, "
+		"width = (int) [ 480, 4096 ], "
+		"height = (int) [ 320, 2160 ], "
+   	    "framerate = (fraction) [ 1/1, 60/1 ] "
 	));
 
 GST_DEBUG_CATEGORY_STATIC (gst_omf_jpeg_src_debug);
@@ -67,10 +68,11 @@ enum
 #define DEFAULT_SIGNAL_HANDOFFS FALSE
 #define DEFAULT_SILENT          TRUE
 #define DEFAULT_DUMP            FALSE
-#define DEFAULT_FORMAT          GST_FORMAT_BYTES
+#define DEFAULT_FORMAT          GST_FORMAT_TIME
 #define DEFAULT_SENID			0
 #define DEFAULT_WIDTH			1920
 #define DEFAULT_HEIGHT			1080
+#define DEFAULT_FRAMERATE		30
 #define DEFAULT_QP				80
 #define	DEFAULT_PREREC_IDX		0
 #define DEFAULT_LOW_BW			FALSE
@@ -87,6 +89,7 @@ enum
   PROP_SENID,
   PROP_WIDTH,
   PROP_HEIGHT,
+  PROP_FRAMERATE,
   PROP_QP,
   PROP_PREREC_IDX,
   PROP_LOW_BW,
@@ -104,6 +107,10 @@ static void gst_omf_jpeg_src_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void gst_omf_jpeg_src_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
+
+static gboolean gst_omf_jpeg_src_setcaps (GstBaseSrc * bsrc, GstCaps * caps);
+static GstCaps *gst_omf_jpeg_src_src_fixate (GstBaseSrc * bsrc,
+    GstCaps * caps);
 
 static gboolean gst_omf_jpeg_src_start (GstBaseSrc * basesrc);
 static gboolean gst_omf_jpeg_src_stop (GstBaseSrc * basesrc);
@@ -184,6 +191,8 @@ gst_omf_jpeg_src_class_init (GstOmfJpegSrcClass * klass)
       "wang.zhou@icatchtek.com");
   gst_element_class_add_static_pad_template (gstelement_class, &srctemplate);
 
+  gstbase_src_class->set_caps = GST_DEBUG_FUNCPTR (gst_omf_jpeg_src_setcaps);
+  gstbase_src_class->fixate = GST_DEBUG_FUNCPTR (gst_omf_jpeg_src_src_fixate);
   gstbase_src_class->is_seekable = GST_DEBUG_FUNCPTR (gst_omf_jpeg_src_is_seekable);
   gstbase_src_class->start = GST_DEBUG_FUNCPTR (gst_omf_jpeg_src_start);
   gstbase_src_class->stop = GST_DEBUG_FUNCPTR (gst_omf_jpeg_src_stop);
@@ -201,17 +210,83 @@ gst_omf_jpeg_src_init (GstOmfJpegSrc * omfjpegsrc)
   omfjpegsrc->format = DEFAULT_FORMAT;
   omfjpegsrc->last_message = NULL;
 
+  /* we operate in time */
+  gst_base_src_set_format (GST_BASE_SRC (omfjpegsrc), DEFAULT_FORMAT);
+  gst_base_src_set_live (GST_BASE_SRC (omfjpegsrc), FALSE);
+
   omfjpegsrc->senid = DEFAULT_SENID;
   omfjpegsrc->width = DEFAULT_WIDTH;
   omfjpegsrc->height = DEFAULT_HEIGHT;
+  omfjpegsrc->framerate = DEFAULT_FRAMERATE;
   omfjpegsrc->qp = DEFAULT_QP;
   omfjpegsrc->prerecidx = DEFAULT_PREREC_IDX;
   omfjpegsrc->lowbw = DEFAULT_LOW_BW;
+  omfjpegsrc->spts_ns = -1;
+  omfjpegsrc->lpts_ns = -1;
   omfjpegsrc->media = NULL;
 
   omfjpegsrc->omf_hd = OmfJpegSrcCreate();
 
 }
+
+static GstCaps *
+gst_omf_jpeg_src_src_fixate (GstBaseSrc * bsrc, GstCaps * caps)
+{
+  GstOmfJpegSrc *src = GST_OMF_JPEG_SRC (bsrc);
+  GstStructure *structure;
+
+  caps = gst_caps_make_writable (caps);
+  structure = gst_caps_get_structure (caps, 0);
+
+  gst_structure_fixate_field_nearest_int (structure, "width", src->width);
+  gst_structure_fixate_field_nearest_int (structure, "height", src->height);
+
+  if (gst_structure_has_field (structure, "framerate"))
+    gst_structure_fixate_field_nearest_fraction (structure, "framerate", src->framerate, 1);
+  else
+    gst_structure_set (structure, "framerate", GST_TYPE_FRACTION, src->framerate, 1, NULL);
+
+        
+
+  caps = GST_BASE_SRC_CLASS (parent_class)->fixate (bsrc, caps);
+
+  return caps;
+}
+
+static gboolean
+gst_omf_jpeg_src_setcaps (GstBaseSrc * bsrc, GstCaps * caps)
+{
+  const GstStructure *structure;
+  GstOmfJpegSrc *omfjpegsrc;
+  guint i;
+  guint n_lines;
+  gint offset;
+
+  omfjpegsrc = GST_OMF_JPEG_SRC (bsrc);
+
+  structure = gst_caps_get_structure (caps, 0);
+
+  GST_OBJECT_LOCK (omfjpegsrc);
+
+  GST_OBJECT_UNLOCK (omfjpegsrc);
+
+  return TRUE;
+
+  /* ERRORS */
+parse_failed:
+  {
+    GST_OBJECT_UNLOCK (omfjpegsrc);
+    GST_DEBUG_OBJECT (bsrc, "failed to parse caps");
+    return FALSE;
+  }
+unsupported_caps:
+  {
+    GST_OBJECT_UNLOCK (omfjpegsrc);
+    GST_DEBUG_OBJECT (bsrc, "unsupported caps: %" GST_PTR_FORMAT, caps);
+    return FALSE;
+  }
+}
+
 
 static void
 gst_omf_jpeg_src_finalize (GObject * object)
@@ -293,6 +368,9 @@ gst_omf_jpeg_src_set_property (GObject * object, guint prop_id,
 	case PROP_HEIGHT:
 		src->height = g_value_get_int(value);
 		break;
+	case PROP_FRAMERATE:
+		src->framerate = g_value_get_int(value);
+		break;
 	case PROP_QP:
 		src->qp = g_value_get_int(value);
 		break;
@@ -343,6 +421,9 @@ gst_omf_jpeg_src_get_property (GObject * object, guint prop_id, GValue * value,
 		break;
 	case PROP_HEIGHT:
 		g_value_set_int(value, src->height);
+		break;
+	case PROP_FRAMERATE:
+		g_value_set_int(value, src->framerate);
 		break;
 	case PROP_QP:
 		g_value_set_int(value, src->qp);
@@ -438,17 +519,34 @@ gst_omf_jpeg_src_create (GstBaseSrc * basesrc, guint64 offset, guint length,
 	 
 	  buf =  gst_omf_jpeg_src_alloc_buffer (src, size, frame.data, frame.free);
 	  if(buf){
+		if(src->spts_ns == -1){
+			src->spts_ns = frame.pts_ns;
+		}
+	 	if(src->lpts_ns == -1){
+			long long f_dur = 1000000000 / src->framerate; //ns
+			src->lpts_ns = frame.pts_ns - f_dur; //ns
+		}
 		///
-		GST_BUFFER_PTS(buf) = frame.pts_ms;
-		GST_BUFFER_DTS(buf) = frame.pts_ms;
-		GST_BUFFER_OFFSET(buf) = frame.index;	
+		GST_BUFFER_PTS(buf) = frame.pts_ns - src->spts_ns;
+		GST_BUFFER_DTS(buf) = GST_BUFFER_PTS(buf);
+		
+		GST_BUFFER_OFFSET(buf) = frame.index ;
+		GST_BUFFER_OFFSET_END(buf) = frame.index + 1;
+
+		long long lpts = src->lpts_ns;
+		src->lpts_ns = frame.pts_ns;
+		GST_BUFFER_DURATION (buf) = frame.pts_ns - lpts;
+		
+		GST_MINI_OBJECT_CAST (buf)->flags = frame.iskeyframe;
+		
+		gst_object_sync_values (GST_OBJECT (src), GST_BUFFER_PTS (buf));	
+		
 	  }
 	}	
   }
 
   if (!src->silent) {
     gchar dts_str[64], pts_str[64], dur_str[64];
-    gchar *flag_str;
 
     GST_OBJECT_LOCK (src);
     g_free (src->last_message);
@@ -472,16 +570,15 @@ gst_omf_jpeg_src_create (GstBaseSrc * basesrc, guint64 offset, guint length,
       g_strlcpy (dur_str, "none", sizeof (dur_str));
     }
 
-    flag_str = gst_buffer_get_flags_string (buf);
     src->last_message =
         g_strdup_printf ("create   ******* (%s:%s) (%u bytes, dts: %s, pts:%s"
         ", duration: %s, offset: %" G_GINT64_FORMAT ", offset_end: %"
-        G_GINT64_FORMAT ", flags: %08x %s) %p",
+        G_GINT64_FORMAT ", flags: %08x) %p",
         GST_DEBUG_PAD_NAME (GST_BASE_SRC_CAST (src)->srcpad), (guint) size,
         dts_str, pts_str, dur_str, GST_BUFFER_OFFSET (buf),
         GST_BUFFER_OFFSET_END (buf), GST_MINI_OBJECT_CAST (buf)->flags,
-        flag_str, buf);
-    g_free (flag_str);
+         buf);
+	
     GST_OBJECT_UNLOCK (src);
 
     g_object_notify_by_pspec ((GObject *) src, pspec_last_message);
@@ -527,6 +624,9 @@ gst_omf_jpeg_src_start (GstBaseSrc * basesrc)
   }
   if(src->height){
   	g_return_val_if_fail(OmfJpegSrcSetHeight(src->omf_hd, src->height), FALSE);
+  }
+  if(src->framerate){
+  	g_return_val_if_fail(OmfJpegSrcSetFrameRate(src->omf_hd, src->framerate), FALSE);
   }
   if(src->prerecidx){
   	g_return_val_if_fail(OmfJpegSrcSetPreRecord(src->omf_hd, src->prerecidx), FALSE);

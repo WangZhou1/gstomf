@@ -51,7 +51,7 @@ EXTERNC BOOL OmfAudPlayerPushFrame(void* hd, OmfFrameC_t* frame){
 			//auto data = frame->data;
 			//std::function<void()> func = [&data,dfree](){if(data) dfree(data);};
 			std::shared_ptr<frame_t> frm{
-				new frame_t{ frame->index, frame->data, frame->size, true, TimePointFromNs(frame->pts_ms), nullptr }
+				new frame_t{ frame->index, frame->data, frame->size, true, TimePointFromNs(frame->pts_ns), nullptr }
 			};
 				
 			return player->PushFrame(frm, TRUE);

@@ -16,6 +16,12 @@
 static gboolean
 plugin_init (GstPlugin * plugin)
 {
+	if (!gst_element_register (plugin, "omfpcmsrc", GST_RANK_NONE,
+		gst_omf_pcm_src_get_type()))	
+		return FALSE;
+	if (!gst_element_register (plugin, "omfpcmplayer", GST_RANK_NONE,
+		gst_omf_pcm_player_get_type()))
+		return FALSE;
 	if (!gst_element_register (plugin, "omfaudsrc", GST_RANK_NONE,
 		gst_omf_aud_src_get_type()))
 		return FALSE;
@@ -28,9 +34,6 @@ plugin_init (GstPlugin * plugin)
 	if (!gst_element_register (plugin, "omfh265src", GST_RANK_NONE,
 		gst_omf_h265_src_get_type()))
 		return FALSE;
-	//if (!gst_element_register (plugin, "omfpcmsrc", GST_RANK_NONE,
-	//	gst_omf_pcm_src_get_type()))	
-	//	return FALSE;
 	if (!gst_element_register (plugin, "omfjpegsrc", GST_RANK_NONE,
 		gst_omf_jpeg_src_get_type()))
 		return FALSE;

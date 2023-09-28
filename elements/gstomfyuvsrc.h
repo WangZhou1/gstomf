@@ -64,8 +64,12 @@ typedef struct _GstOmfYuvSrc {
   guint			senid;
   guint			width;
   guint			height;
+  guint			framerate;
 
   gboolean		interlaced;
+
+  long long 	spts_ns;	
+  long long		lpts_ns;
 
   const gchar*	media;
 
